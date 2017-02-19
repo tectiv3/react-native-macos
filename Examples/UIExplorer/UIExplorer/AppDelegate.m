@@ -16,10 +16,10 @@
 #import <Cocoa/Cocoa.h>
 
 #import "RCTBridge.h"
-#import "RCTBundleURLProvider.h"
-#import "RCTJavaScriptLoader.h"
-#import "RCTRootView.h"
-#import "RCTEventDispatcher.h"
+#import <React/RCTJavaScriptLoader.h>
+#import <React/RCTRootView.h>
+#import <React/RCTBundleURLProvider.h>
+#import <React/RCTEventDispatcher.h>
 
 @interface AppDelegate() <RCTBridgeDelegate, NSSearchFieldDelegate>
 

@@ -139,14 +139,23 @@ class Package {
 }
 
 function getReplacements(pkg) {
+  let rnm = pkg['react-native-macos'];
   let rn = pkg['react-native'];
   let browser = pkg.browser;
   if (rn == null) {
     return browser;
   }
 
-  if (browser == null) {
+  if (rnm == null && browser == null) {
     return rn;
+  }
+
+  if (rn == null && browser == null) {
+    return rnm;
+  }
+
+  if (typeof rnm === 'string') {
+    rnm = { [pkg.main]: rnm };
   }
 
   if (typeof rn === 'string') {
@@ -164,7 +173,7 @@ function getReplacements(pkg) {
   // merge with "browser" as default,
   // "react-native" as override
   // $FlowFixMe(>=0.35.0) browser and rn should be objects
-  return { ...browser, ...rn };
+  return { ...browser, ...rn, ...rnm };
 }
 
 module.exports = Package;

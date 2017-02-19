@@ -19,7 +19,7 @@ exports.assetExts =  [
 
 exports.moduleSystem = require.resolve('./src/Resolver/polyfills/require.js');
 
-exports.platforms = ['ios', 'android', 'windows', 'web'];
+exports.platforms = ['ios', 'android', 'windows', 'web', 'macos'];
 
 exports.polyfills = [
   require.resolve('./src/Resolver/polyfills/Object.es6.js'),
