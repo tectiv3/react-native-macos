@@ -10,24 +10,23 @@
 #import "RCTProfile.h"
 
 #import <dlfcn.h>
-
 #import <libkern/OSAtomic.h>
 #import <mach/mach.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 
-#import <AppKit/AppKit.h>
+#import <UIKit/UIKit.h>
 
 #import "RCTAssert.h"
-#import "RCTBridge.h"
 #import "RCTBridge+Private.h"
+#import "RCTBridge.h"
 #import "RCTComponentData.h"
 #import "RCTDefines.h"
+#import "RCTJSCExecutor.h"
 #import "RCTLog.h"
 #import "RCTModuleData.h"
-#import "RCTUtils.h"
 #import "RCTUIManager.h"
-#import "RCTJSCExecutor.h"
+#import "RCTUtils.h"
 
 NSString *const RCTProfileDidStartProfiling = @"RCTProfileDidStartProfiling";
 NSString *const RCTProfileDidEndProfiling = @"RCTProfileDidEndProfiling";
@@ -51,11 +50,9 @@ static NSDictionary *RCTProfileInfo;
 static NSMutableDictionary *RCTProfileOngoingEvents;
 static NSTimeInterval RCTProfileStartTime;
 static NSUInteger RCTProfileEventID = 0;
-
-static NSTimer *RCTProfileDisplayLink; // TODO: consider DisplayLink
+static CADisplayLink *RCTProfileDisplayLink;
 static __weak RCTBridge *_RCTProfilingBridge;
-static NSWindow *RCTProfileControlsWindow;
-
+static UIWindow *RCTProfileControlsWindow;
 
 #pragma mark - Macros
 
@@ -138,22 +135,6 @@ static NSDictionary *RCTProfileGetMemoryUsage(void)
   }
 }
 
-static NSDictionary *RCTProfileMergeArgs(NSDictionary *args0, NSDictionary *args1)
-{
-  args0 = RCTNilIfNull(args0);
-  args1 = RCTNilIfNull(args1);
-
-  if (!args0 && args1) {
-    args0 = args1;
-  } else if (args0 && args1) {
-    NSMutableDictionary *d = [args0 mutableCopy];
-    [d addEntriesFromDictionary:args1];
-    args0 = [d copy];
-  }
-
-  return RCTNullIfNil(args0);
-}
-
 #pragma mark - Module hooks
 
 static const char *RCTProfileProxyClassName(Class class)
@@ -209,19 +190,19 @@ void RCTProfileTrampolineStart(id self, SEL cmd)
    * block.
    */
   Class klass = [self class];
-  RCT_PROFILE_BEGIN_EVENT(RCTProfileTagAlways, [NSString stringWithFormat:@"-[%s %s]", class_getName(klass), sel_getName(cmd)], nil);
+  RCT_PROFILE_BEGIN_EVENT(RCTProfileTagAlways, ([NSString stringWithFormat:@"-[%s %s]", class_getName(klass), sel_getName(cmd)]), nil);
 }
 
 RCT_EXTERN void RCTProfileTrampolineEnd(void);
 void RCTProfileTrampolineEnd(void)
 {
-  RCT_PROFILE_END_EVENT(RCTProfileTagAlways, @"objc_call,modules,auto", nil);
+  RCT_PROFILE_END_EVENT(RCTProfileTagAlways, @"objc_call,modules,auto");
 }
 
-static NSView *(*originalCreateView)(RCTComponentData *, SEL, NSNumber *);
-static NSView *RCTProfileCreateView(RCTComponentData *self, SEL _cmd, NSNumber *tag)
+static UIView *(*originalCreateView)(RCTComponentData *, SEL, NSNumber *);
+static UIView *RCTProfileCreateView(RCTComponentData *self, SEL _cmd, NSNumber *tag)
 {
-  NSView *view = originalCreateView(self, _cmd, tag);
+  UIView *view = originalCreateView(self, _cmd, tag);
   RCTProfileHookInstance(view);
   return view;
 }
@@ -307,9 +288,11 @@ void RCTProfileHookInstance(id instance)
 
   objc_registerClassPair(proxyClass);
   object_setClass(instance, proxyClass);
-}
 
-static NSView *(*originalCreateView)(RCTComponentData *, SEL, NSNumber *);
+  if (moduleClass == [RCTUIManager class]) {
+    RCTProfileHookUIManager((RCTUIManager *)instance);
+  }
+}
 
 void RCTProfileHookModules(RCTBridge *bridge)
 {
@@ -331,7 +314,7 @@ void RCTProfileHookModules(RCTBridge *bridge)
       } queue:moduleData.methodQueue];
     }
   }
-  RCT_PROFILE_END_EVENT(RCTProfileTagAlways, @"", nil);
+  RCT_PROFILE_END_EVENT(RCTProfileTagAlways, @"");
 }
 
 static void RCTProfileUnhookInstance(id instance)
@@ -372,23 +355,23 @@ void RCTProfileUnhookModules(RCTBridge *bridge)
 
 @implementation RCTProfile
 
-+ (void)vsync:(NSTimer *)timer
++ (void)vsync:(CADisplayLink *)displayLink
 {
-  RCTProfileImmediateEvent(RCTProfileTagAlways, @"VSYNC", CACurrentMediaTime(), 'g');
+  RCTProfileImmediateEvent(RCTProfileTagAlways, @"VSYNC", displayLink.timestamp, 'g');
 }
 
 + (void)reload
 {
-  [[NSNotificationCenter defaultCenter] postNotificationName:RCTReloadNotification
-                                                      object:NULL];
+  [RCTProfilingBridge() reload];
 }
 
-+ (void)toggle:(NSButton *)target
++ (void)toggle:(UIButton *)target
 {
   BOOL isProfiling = RCTProfileIsProfiling();
 
   // Start and Stop are switched here, since we're going to toggle isProfiling
-  [target setTitle:isProfiling ? @"Start" : @"Stop"];
+  [target setTitle:isProfiling ? @"Start" : @"Stop"
+          forState:UIControlStateNormal];
 
   if (isProfiling) {
     RCTProfileEnd(RCTProfilingBridge(), ^(NSString *result) {
@@ -397,11 +380,37 @@ void RCTProfileUnhookModules(RCTBridge *bridge)
                atomically:YES
                  encoding:NSUTF8StringEncoding
                     error:nil];
-      NSLog(@"Show ActivityContoller for %@ here", outFile);
+#if !TARGET_OS_TV
+      UIActivityViewController *activityViewController = [[UIActivityViewController alloc] initWithActivityItems:@[[NSURL fileURLWithPath:outFile]]
+                                                                                           applicationActivities:nil];
+      activityViewController.completionWithItemsHandler = ^(__unused UIActivityType activityType,
+                                                            __unused BOOL completed,
+                                                            __unused NSArray *items,
+                                                            __unused NSError *error) {
+        RCTProfileControlsWindow.hidden = NO;
+      };
+      RCTProfileControlsWindow.hidden = YES;
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [[[[[UIApplication sharedApplication] delegate] window] rootViewController] presentViewController:activityViewController
+                                                                                                 animated:YES
+                                                                                               completion:nil];
+      });
+#endif
     });
   } else {
     RCTProfileInit(RCTProfilingBridge());
   }
+}
+
++ (void)drag:(UIPanGestureRecognizer *)gestureRecognizer
+{
+  CGPoint translation = [gestureRecognizer translationInView:RCTProfileControlsWindow];
+  RCTProfileControlsWindow.center = CGPointMake(
+    RCTProfileControlsWindow.center.x + translation.x,
+    RCTProfileControlsWindow.center.y + translation.y
+  );
+  [gestureRecognizer setTranslation:CGPointMake(0, 0)
+                             inView:RCTProfileControlsWindow];
 }
 
 @end
@@ -426,7 +435,6 @@ BOOL RCTProfileIsProfiling(void)
 void RCTProfileInit(RCTBridge *bridge)
 {
   // TODO: enable assert JS thread from any file (and assert here)
-
   if (RCTProfileIsProfiling()) {
     return;
   }
@@ -464,15 +472,10 @@ void RCTProfileInit(RCTBridge *bridge)
 
   RCTProfileHookModules(bridge);
 
-  // TODO: replace NSTimer with hardcoded timeInterval
-  RCTProfileDisplayLink = [NSTimer
-                           timerWithTimeInterval:0.01
-                           target:[RCTProfile class]
-                           selector:@selector(vsync:)
-                           userInfo:nil
-                           repeats:YES];
-
-  [[NSRunLoop mainRunLoop] addTimer:RCTProfileDisplayLink forMode:NSRunLoopCommonModes];
+  RCTProfileDisplayLink = [CADisplayLink displayLinkWithTarget:[RCTProfile class]
+                                                      selector:@selector(vsync:)];
+  [RCTProfileDisplayLink addToRunLoop:[NSRunLoop mainRunLoop]
+                              forMode:NSRunLoopCommonModes];
 
   [[NSNotificationCenter defaultCenter] postNotificationName:RCTProfileDidStartProfiling
                                                       object:bridge];
@@ -553,13 +556,12 @@ void _RCTProfileEndEvent(
   NSString *threadName,
   NSTimeInterval time,
   uint64_t tag,
-  NSString *category,
-  NSDictionary *args
+  NSString *category
 ) {
   CHECK();
 
   if (callbacks != NULL) {
-    callbacks->end_section(tag, args.count, RCTProfileSystraceArgsFromNSDictionary(args));
+    callbacks->end_section(tag, 0, nil);
     return;
   }
 
@@ -573,7 +575,6 @@ void _RCTProfileEndEvent(
     }
 
     NSNumber *start = event[0];
-
     RCTProfileAddEvent(RCTProfileTraceEvents,
       @"tid": threadName,
       @"name": event[1],
@@ -581,7 +582,7 @@ void _RCTProfileEndEvent(
       @"ph": @"X",
       @"ts": start,
       @"dur": @(RCTProfileTimestamp(time).doubleValue - start.doubleValue),
-      @"args": RCTProfileMergeArgs(event[2], args),
+      @"args": event[2],
     );
   });
 }
@@ -618,13 +619,12 @@ void RCTProfileEndAsyncEvent(
   NSString *category,
   NSUInteger cookie,
   NSString *name,
-  NSString *threadName,
-  NSDictionary *args
+  NSString *threadName
 ) {
   CHECK();
 
   if (callbacks != NULL) {
-    callbacks->end_async_section(tag, name.UTF8String, (int)(cookie % INT_MAX), args.count, RCTProfileSystraceArgsFromNSDictionary(args));
+    callbacks->end_async_section(tag, name.UTF8String, (int)(cookie % INT_MAX), 0, nil);
     return;
   }
 
@@ -643,7 +643,7 @@ void RCTProfileEndAsyncEvent(
         @"ph": @"X",
         @"ts": event[0],
         @"dur": @(endTimestamp.doubleValue - [event[0] doubleValue]),
-        @"args": RCTProfileMergeArgs(event[2], args),
+        @"args": event[2],
       );
       [RCTProfileOngoingEvents removeObjectForKey:@(cookie)];
     }
@@ -677,18 +677,16 @@ void RCTProfileImmediateEvent(
   });
 }
 
-NSNumber *_RCTProfileBeginFlowEvent(void)
+NSUInteger _RCTProfileBeginFlowEvent(void)
 {
   static NSUInteger flowID = 0;
 
-  CHECK(@0);
+  CHECK(0);
 
-  unsigned int cookie = ++flowID;
-  NSNumber *currentID = @(cookie);
-
+  NSUInteger cookie = ++flowID;
   if (callbacks != NULL) {
-    callbacks->begin_async_flow(1, "flow", cookie);
-    return currentID;
+    callbacks->begin_async_flow(1, "flow", (int)cookie);
+    return cookie;
   }
 
   NSTimeInterval time = CACurrentMediaTime();
@@ -698,7 +696,7 @@ NSNumber *_RCTProfileBeginFlowEvent(void)
     RCTProfileAddEvent(RCTProfileTraceEvents,
       @"tid": threadName,
       @"name": @"flow",
-      @"id": currentID,
+      @"id": @(cookie),
       @"cat": @"flow",
       @"ph": @"s",
       @"ts": RCTProfileTimestamp(time),
@@ -706,15 +704,15 @@ NSNumber *_RCTProfileBeginFlowEvent(void)
 
   });
 
-  return currentID;
+  return cookie;
 }
 
-void _RCTProfileEndFlowEvent(NSNumber *flowID)
+void _RCTProfileEndFlowEvent(NSUInteger cookie)
 {
   CHECK();
 
   if (callbacks != NULL) {
-    callbacks->end_async_flow(1, "flow", [flowID integerValue]);
+    callbacks->end_async_flow(1, "flow", (int)cookie);
     return;
   }
 
@@ -725,7 +723,7 @@ void _RCTProfileEndFlowEvent(NSNumber *flowID)
     RCTProfileAddEvent(RCTProfileTraceEvents,
       @"tid": threadName,
       @"name": @"flow",
-      @"id": flowID,
+      @"id": @(cookie),
       @"cat": @"flow",
       @"ph": @"f",
       @"ts": RCTProfileTimestamp(time),
@@ -759,13 +757,15 @@ void RCTProfileSendResult(RCTBridge *bridge, NSString *route, NSData *data)
                                                  encoding:NSUTF8StringEncoding];
 
        if (message.length) {
+#if !TARGET_OS_TV
          dispatch_async(dispatch_get_main_queue(), ^{
-           NSAlert *alert = [[NSAlert alloc] init];
-           [alert addButtonWithTitle:@"OK"];
-           [alert setMessageText:message];
-           if ([alert runModal] == NSAlertFirstButtonReturn) {
-           }
+           [[[UIAlertView alloc] initWithTitle:@"Profile"
+                                       message:message
+                                      delegate:nil
+                             cancelButtonTitle:@"OK"
+                             otherButtonTitles:nil] show];
          });
+#endif
        }
      }
    }];
@@ -778,38 +778,38 @@ void RCTProfileShowControls(void)
   static const CGFloat height = 30;
   static const CGFloat width = 60;
 
-  NSWindow *window = [[NSWindow alloc] initWithContentRect:CGRectMake(20, 80, width * 2, height)
-                                                 styleMask:0
-                                                   backing:NSBackingStoreBuffered
-                                                     defer:NO];
+  UIWindow *window = [[UIWindow alloc] initWithFrame:CGRectMake(20, 80, width * 2, height)];
+  window.windowLevel = UIWindowLevelAlert + 1000;
+  window.hidden = NO;
+  window.backgroundColor = [UIColor lightGrayColor];
+  window.layer.borderColor = [UIColor grayColor].CGColor;
+  window.layer.borderWidth = 1;
+  window.alpha = 0.8;
 
-  NSView *rootView = [[NSView alloc] initWithFrame:window.frame];
-  [rootView setWantsLayer:YES];
-  rootView.layer.backgroundColor = [NSColor lightGrayColor].CGColor;
-  rootView.layer.borderColor = [NSColor grayColor].CGColor;
-  rootView.layer.borderWidth = 1;
-  rootView.alphaValue = 0.8;
+  UIButton *startOrStop = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, width, height)];
+  [startOrStop setTitle:RCTProfileIsProfiling() ? @"Stop" : @"Start"
+               forState:UIControlStateNormal];
+  [startOrStop addTarget:[RCTProfile class] action:@selector(toggle:) forControlEvents:UIControlEventTouchUpInside];
+  startOrStop.titleLabel.font = [UIFont systemFontOfSize:12];
 
-  NSButton *startOrStop = [[NSButton alloc] initWithFrame:CGRectMake(0, 0, width, height)];
-  [startOrStop setTitle:RCTProfileIsProfiling() ? @"Stop" : @"Start"];
-  [startOrStop setAction:@selector(toggle:)];
-  startOrStop.font = [NSFont systemFontOfSize:12];
+  UIButton *reload = [[UIButton alloc] initWithFrame:CGRectMake(width, 0, width, height)];
+  [reload setTitle:@"Reload" forState:UIControlStateNormal];
+  [reload addTarget:[RCTProfile class] action:@selector(reload) forControlEvents:UIControlEventTouchUpInside];
+  reload.titleLabel.font = [UIFont systemFontOfSize:12];
 
-  NSButton *reload = [[NSButton alloc] initWithFrame:CGRectMake(width, 0, width, height)];
-  [reload setTitle:@"Reload"];
-  [reload setAction:@selector(reload)];
-  reload.font = [NSFont systemFontOfSize:12];
+  [window addSubview:startOrStop];
+  [window addSubview:reload];
 
-  [rootView addSubview:startOrStop];
-  [rootView addSubview:reload];
-  [window setContentView:rootView];
+  UIPanGestureRecognizer *gestureRecognizer = [[UIPanGestureRecognizer alloc] initWithTarget:[RCTProfile class]
+                                                                                      action:@selector(drag:)];
+  [window addGestureRecognizer:gestureRecognizer];
 
   RCTProfileControlsWindow = window;
 }
 
 void RCTProfileHideControls(void)
 {
-  //RCTProfileControlsWindow.hidden = YES;
+  RCTProfileControlsWindow.hidden = YES;
   RCTProfileControlsWindow = nil;
 }
 

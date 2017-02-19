@@ -15,17 +15,22 @@
 
 #import "RCTAssert.h"
 #import "RCTBridge.h"
+#import "RCTBridge+Private.h"
 #import "RCTEventDispatcher.h"
 #import "RCTKeyCommands.h"
 #import "RCTLog.h"
 #import "RCTPerformanceLogger.h"
-#import "RCTSourceCode.h"
 #import "RCTTouchHandler.h"
 #import "RCTUIManager.h"
 #import "RCTUtils.h"
 #import "RCTView.h"
-#import "NSView+React.h"
+#import "UIView+React.h"
 #import "RCTProfile.h"
+
+#if TARGET_OS_TV
+#import "RCTTVRemoteHandler.h"
+#import "RCTTVNavigationEventEmitter.h"
+#endif
 
 NSString *const RCTContentDidAppearNotification = @"RCTContentDidAppearNotification";
 
@@ -39,6 +44,7 @@ NSString *const RCTContentDidAppearNotification = @"RCTContentDidAppearNotificat
 
 @property (nonatomic, readonly) BOOL contentHasAppeared;
 @property (nonatomic, readonly, strong) RCTTouchHandler *touchHandler;
+@property (nonatomic, assign) BOOL passThroughTouches;
 
 - (instancetype)initWithFrame:(CGRect)frame
                        bridge:(RCTBridge *)bridge
@@ -52,6 +58,8 @@ NSString *const RCTContentDidAppearNotification = @"RCTContentDidAppearNotificat
   NSString *_moduleName;
   NSDictionary *_launchOptions;
   RCTRootContentView *_contentView;
+
+  BOOL _passThroughTouches;
 }
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge
@@ -66,14 +74,7 @@ NSString *const RCTContentDidAppearNotification = @"RCTContentDidAppearNotificat
 
   if ((self = [super initWithFrame:CGRectZero])) {
 
-    // TODO: Turn on layer backing just to avoid https://github.com/ptmt/react-native-macos/issues/47
-    // Maybe we could turn it off after the bug fixed in the future.
-    if (([self window].styleMask & NSFullSizeContentViewWindowMask) != NSFullSizeContentViewWindowMask
-        && [self window].contentView == self) {
-      [self setWantsLayer:YES];
-    }
-
-    [self setNeedsLayout:NO];
+    self.backgroundColor = [UIColor whiteColor];
 
     _bridge = bridge;
     _moduleName = moduleName;
@@ -81,6 +82,7 @@ NSString *const RCTContentDidAppearNotification = @"RCTContentDidAppearNotificat
     _loadingViewFadeDelay = 0.25;
     _loadingViewFadeDuration = 0.25;
     _sizeFlexibility = RCTRootViewSizeFlexibilityNone;
+    self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(bridgeDidReload)
@@ -97,14 +99,21 @@ NSString *const RCTContentDidAppearNotification = @"RCTContentDidAppearNotificat
                                                  name:RCTContentDidAppearNotification
                                                object:self];
 
+#if TARGET_OS_TV
+    self.tvRemoteHandler = [RCTTVRemoteHandler new];
+    for (UIGestureRecognizer *gr in self.tvRemoteHandler.tvRemoteGestureRecognizers) {
+      [self addGestureRecognizer:gr];
+    }
+#endif
+
     if (!_bridge.loading) {
-      [self bundleFinishedLoading:_bridge];
+      [self bundleFinishedLoading:[_bridge batchedBridge]];
     }
 
     [self showLoadingView];
   }
 
-  RCT_PROFILE_END_EVENT(RCTProfileTagAlways, @"", nil);
+  RCT_PROFILE_END_EVENT(RCTProfileTagAlways, @"");
 
   return self;
 }
@@ -124,12 +133,34 @@ NSString *const RCTContentDidAppearNotification = @"RCTContentDidAppearNotificat
 RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
 RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 
-- (void)setBackgroundColor:(NSColor *)backgroundColor
+#if TARGET_OS_TV
+- (UIView *)preferredFocusedView
 {
-  [super.layer setBackgroundColor:[backgroundColor CGColor]];
+  if (self.reactPreferredFocusedView) {
+    return self.reactPreferredFocusedView;
+  }
+  return [super preferredFocusedView];
+}
+#endif
+
+- (void)setBackgroundColor:(UIColor *)backgroundColor
+{
+  super.backgroundColor = backgroundColor;
+  _contentView.backgroundColor = backgroundColor;
 }
 
-- (NSViewController *)reactViewController
+- (BOOL)passThroughTouches
+{
+  return _contentView.passThroughTouches;
+}
+
+- (void)setPassThroughTouches:(BOOL)passThroughTouches
+{
+  _passThroughTouches = passThroughTouches;
+  _contentView.passThroughTouches = passThroughTouches;
+}
+
+- (UIViewController *)reactViewController
 {
   return _reactViewController ?: [super reactViewController];
 }
@@ -139,12 +170,7 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
   return YES;
 }
 
-- (BOOL)isFlipped
-{
-  return NO;
-}
-
-- (void)setLoadingView:(NSView *)loadingView
+- (void)setLoadingView:(UIView *)loadingView
 {
   _loadingView = loadingView;
   if (!_contentView.contentHasAppeared) {
@@ -155,7 +181,6 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 - (void)showLoadingView
 {
   if (_loadingView && !_contentView.contentHasAppeared) {
-    NSLog(@"RCTRootView: showLoadingView");
     _loadingView.hidden = NO;
     [self addSubview:_loadingView];
   }
@@ -164,11 +189,23 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 - (void)hideLoadingView
 {
   if (_loadingView.superview == self && _contentView.contentHasAppeared) {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(_loadingViewFadeDelay * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
+    if (_loadingViewFadeDuration > 0) {
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(_loadingViewFadeDelay * NSEC_PER_SEC)),
+                     dispatch_get_main_queue(), ^{
 
+                       [UIView transitionWithView:self
+                                         duration:self->_loadingViewFadeDuration
+                                          options:UIViewAnimationOptionTransitionCrossDissolve
+                                       animations:^{
+                                         self->_loadingView.hidden = YES;
+                                       } completion:^(__unused BOOL finished) {
+                                         [self->_loadingView removeFromSuperview];
+                                       }];
+                     });
+    } else {
       _loadingView.hidden = YES;
-    });
+      [_loadingView removeFromSuperview];
+    }
   }
 }
 
@@ -198,6 +235,9 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 - (void)javaScriptDidLoad:(NSNotification *)notification
 {
   RCTAssertMainQueue();
+
+  // Use the (batched) bridge that's sent in the notification payload, so the
+  // RCTRootContentView is scoped to the right bridge
   RCTBridge *bridge = notification.userInfo[@"bridge"];
   [self bundleFinishedLoading:bridge];
 }
@@ -208,17 +248,20 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
     return;
   }
 
-  NSViewController *rootController = [NSViewController new];
-  rootController.view = self;
-  _reactViewController = rootController;
-
   [_contentView removeFromSuperview];
   _contentView = [[RCTRootContentView alloc] initWithFrame:self.bounds
                                                     bridge:bridge
                                                   reactTag:self.reactTag
-                                            sizeFlexiblity:self.sizeFlexibility];
+                                            sizeFlexiblity:_sizeFlexibility];
   [self runApplication:bridge];
-  [self addSubview:_contentView];
+
+  _contentView.backgroundColor = self.backgroundColor;
+  _contentView.passThroughTouches = _passThroughTouches;
+  [self insertSubview:_contentView atIndex:0];
+
+  if (_sizeFlexibility == RCTRootViewSizeFlexibilityNone) {
+    self.intrinsicSize = self.bounds.size;
+  }
 }
 
 - (void)runApplication:(RCTBridge *)bridge
@@ -229,6 +272,7 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
     @"initialProps": _appProperties ?: @{},
   };
 
+  RCTLogInfo(@"Running application %@ (%@)", moduleName, appParameters);
   [bridge enqueueJSCall:@"AppRegistry"
                  method:@"runApplication"
                    args:@[moduleName, appParameters]
@@ -238,19 +282,27 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 - (void)setSizeFlexibility:(RCTRootViewSizeFlexibility)sizeFlexibility
 {
   _sizeFlexibility = sizeFlexibility;
-  [self layout];
+  [self setNeedsLayout];
 }
 
-- (void)layout
+- (void)layoutSubviews
 {
-  [super layout];
+  [super layoutSubviews];
   _contentView.frame = self.bounds;
-  // TODO: set center coordinates
-  //_loadingView.c = CGRectGetMidX(self.bounds);
-//  (CGPoint){
-//    CGRectGetMidX(self.bounds),
-//    CGRectGetMidY(self.bounds)
-//  };
+  _loadingView.center = (CGPoint){
+    CGRectGetMidX(self.bounds),
+    CGRectGetMidY(self.bounds)
+  };
+}
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event
+{
+  // The root view itself should never receive touches
+  UIView *hitView = [super hitTest:point withEvent:event];
+  if (self.passThroughTouches && hitView == self) {
+    return nil;
+  }
+  return hitView;
 }
 
 - (void)setAppProperties:(NSDictionary *)appProperties
@@ -320,9 +372,7 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 @implementation RCTRootContentView
 {
   __weak RCTBridge *_bridge;
-  RCTTouchHandler *_touchHandler;
-  NSColor *_backgroundColor;
-  CFTimeInterval _lastResizingAt;
+  UIColor *_backgroundColor;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -332,21 +382,19 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 {
   if ((self = [super initWithFrame:frame])) {
     _bridge = bridge;
-    _lastResizingAt = CACurrentMediaTime();
     self.reactTag = reactTag;
     _touchHandler = [[RCTTouchHandler alloc] initWithBridge:_bridge];
-    [self addGestureRecognizer:_touchHandler];
+    [_touchHandler attachToView:self];
     [_bridge.uiManager registerRootView:self withSizeFlexibility:sizeFlexibility];
     self.layer.backgroundColor = NULL;
   }
   return self;
 }
 
-
 RCT_NOT_IMPLEMENTED(-(instancetype)initWithFrame:(CGRect)frame)
 RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder:(nonnull NSCoder *)aDecoder)
 
-- (void)insertReactSubview:(NSView *)subview atIndex:(NSInteger)atIndex
+- (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex
 {
   [super insertReactSubview:subview atIndex:atIndex];
   [_bridge.performanceLogger markStopForTag:RCTPLTTI];
@@ -359,58 +407,47 @@ RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder:(nonnull NSCoder *)aDecoder)
   });
 }
 
-
-- (void)viewDidMoveToWindow {
-  NSTrackingArea *trackingArea = [[NSTrackingArea alloc] initWithRect:NSZeroRect
-                                                              options:NSTrackingActiveInActiveApp | NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved | NSTrackingInVisibleRect
-                                                                owner:self
-                                                             userInfo:nil];
-
-  [self addTrackingArea:trackingArea];
-}
-
-- (void)mouseMoved:(NSEvent *)theEvent
-{
-  [((RCTTouchHandler *)self.gestureRecognizers.firstObject) mouseMoved:theEvent];
-}
-
-- (void)viewDidEndLiveResize
-{
-  [super viewDidEndLiveResize];
-  [_bridge.uiManager setFrame:self.frame forView:self];
-}
-
 - (void)setFrame:(CGRect)frame
 {
   super.frame = frame;
   if (self.reactTag && _bridge.isValid) {
-    if (!self.inLiveResize || (self.inLiveResize && (CACurrentMediaTime() - _lastResizingAt) > 0.005)) {
-      [_bridge.uiManager setFrame:frame forView:self];
-      _lastResizingAt = CACurrentMediaTime();
-    }
+    [_bridge.uiManager setSize:frame.size forView:self];
   }
 }
 
-- (void)setBackgroundColor:(NSColor *)backgroundColor
+- (void)setBackgroundColor:(UIColor *)backgroundColor
 {
   _backgroundColor = backgroundColor;
   if (self.reactTag && _bridge.isValid) {
-      [_bridge.uiManager setBackgroundColor:backgroundColor forView:self];
+    [_bridge.uiManager setBackgroundColor:backgroundColor forView:self];
   }
 }
 
-- (NSColor *)backgroundColor
+- (UIColor *)backgroundColor
 {
   return _backgroundColor;
 }
 
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event
+{
+  // The root content view itself should never receive touches
+  UIView *hitView = [super hitTest:point withEvent:event];
+  if (_passThroughTouches && hitView == self) {
+    return nil;
+  }
+  return hitView;
+}
+
 - (void)invalidate
 {
+  if (self.userInteractionEnabled) {
+    self.userInteractionEnabled = NO;
     [(RCTRootView *)self.superview contentViewInvalidated];
     [_bridge enqueueJSCall:@"AppRegistry"
                     method:@"unmountApplicationComponentAtRootTag"
                       args:@[self.reactTag]
                 completion:NULL];
+  }
 }
 
 @end

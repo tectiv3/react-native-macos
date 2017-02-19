@@ -11,12 +11,11 @@
  */
 'use strict';
 
-var NativeMethodsMixin = require('react/lib/NativeMethodsMixin');
+var NativeMethodsMixin = require('NativeMethodsMixin');
 var NativeModules = require('NativeModules');
 var ImageResizeMode = require('ImageResizeMode');
 var ImageStylePropTypes = require('ImageStylePropTypes');
 var ViewStylePropTypes = require('ViewStylePropTypes');
-var PropTypes = require('react/lib/ReactPropTypes');
 var React = require('React');
 var ReactNativeViewAttributes = require('ReactNativeViewAttributes');
 var StyleSheet = require('StyleSheet');
@@ -30,6 +29,7 @@ var resolveAssetSource = require('resolveAssetSource');
 var Set = require('Set');
 var filterObject = require('fbjs/lib/filterObject');
 
+var PropTypes = React.PropTypes;
 var {
   ImageLoader,
 } = NativeModules;
@@ -65,6 +65,7 @@ function generateRequestId() {
 var ImageViewAttributes = merge(ReactNativeViewAttributes.UIView, {
   src: true,
   loadingIndicatorSrc: true,
+  resizeMethod: true,
   resizeMode: true,
   progressiveRenderingEnabled: true,
   fadeDuration: true,
@@ -82,6 +83,10 @@ var Image = React.createClass({
      * `uri` is a string representing the resource identifier for the image, which
      * could be an http address, a local file path, or a static image
      * resource (which should be wrapped in the `require('./path/to/image.png')` function).
+     *
+     * `headers` is an object representing the HTTP headers to send along with the request
+     * for a remote image.
+     *
      * This prop can also contain several remote `uri`, specified together with
      * their width and height. The native side will then choose the best `uri` to display
      * based on the measured size of the image container.
@@ -89,6 +94,7 @@ var Image = React.createClass({
     source: PropTypes.oneOfType([
       PropTypes.shape({
         uri: PropTypes.string,
+        headers: PropTypes.objectOf(PropTypes.string),
       }),
       // Opaque type returned by require('./image.jpg')
       PropTypes.number,
@@ -119,6 +125,10 @@ var Image = React.createClass({
      */
     onLoadStart: PropTypes.func,
     /**
+     * Invoked on load error
+     */
+    onError: PropTypes.func,
+    /**
      * Invoked when load completes successfully
      */
     onLoad: PropTypes.func,
@@ -130,6 +140,26 @@ var Image = React.createClass({
      * Used to locate this view in end-to-end tests.
      */
     testID: PropTypes.string,
+    /**
+     * The mechanism that should be used to resize the image when the image's dimensions
+     * differ from the image view's dimensions. Defaults to `auto`.
+     *
+     * - `auto`: Use heuristics to pick between `resize` and `scale`.
+     *
+     * - `resize`: A software operation which changes the encoded image in memory before it
+     * gets decoded. This should be used instead of `scale` when the image is much larger
+     * than the view.
+     *
+     * - `scale`: The image gets drawn downscaled or upscaled. Compared to `resize`, `scale` is
+     * faster (usually hardware accelerated) and produces higher quality images. This
+     * should be used if the image is smaller than the view. It should also be used if the
+     * image is slightly bigger than the view.
+     *
+     * More details about `resize` and `scale` can be found at http://frescolib.org/docs/resizing-rotating.html.
+     *
+     * @platform android
+     */
+    resizeMethod: PropTypes.oneOf(['auto', 'resize', 'scale']),
     /**
      * Determines how to resize the image when the frame doesn't match the raw
      * image dimensions.
@@ -144,8 +174,12 @@ var Image = React.createClass({
      *
      * 'stretch': Scale width and height independently, This may change the
      * aspect ratio of the src.
+     *
+     * 'center': Scale the image down so that it is completely visible,
+     * if bigger than the area of the view.
+     * The image will not be scaled up.
      */
-    resizeMode: PropTypes.oneOf(['cover', 'contain', 'stretch']),
+    resizeMode: PropTypes.oneOf(['cover', 'contain', 'stretch', 'center']),
   },
 
   statics: {
@@ -181,6 +215,24 @@ var Image = React.createClass({
     abortPrefetch(requestId: number) {
       ImageLoader.abortRequest(requestId);
     },
+
+    /**
+     * Perform cache interrogation.
+     *
+     * @param urls the list of image URLs to check the cache for.
+     * @return a mapping from url to cache status, such as "disk" or "memory". If a requested URL is
+     *         not in the mapping, it means it's not in the cache.
+     */
+    async queryCache(urls: Array<string>): Promise<Map<string, 'memory' | 'disk'>> {
+      return await ImageLoader.queryCache(urls);
+    },
+
+    /**
+     * Resolves an asset reference into an object which has the properties `uri`, `width`,
+     * and `height`. The input may either be a number (opaque type returned by
+     * require('./foo.png')) or an `ImageSource` like { uri: '<http location || file path>' }
+     */
+    resolveAssetSource: resolveAssetSource,
   },
 
   mixins: [NativeMethodsMixin],
@@ -248,11 +300,12 @@ var Image = React.createClass({
         sources = source;
       }
 
-      const {onLoadStart, onLoad, onLoadEnd} = this.props;
+      const {onLoadStart, onLoad, onLoadEnd, onError} = this.props;
       const nativeProps = merge(this.props, {
         style,
-        shouldNotifyLoadEvents: !!(onLoadStart || onLoad || onLoadEnd),
+        shouldNotifyLoadEvents: !!(onLoadStart || onLoad || onLoadEnd || onError),
         src: sources,
+        headers: source.headers,
         loadingIndicatorSrc: loadingIndicatorSource ? loadingIndicatorSource.uri : null,
       });
 
@@ -299,10 +352,8 @@ var styles = StyleSheet.create({
 var cfg = {
   nativeOnly: {
     src: true,
+    headers: true,
     loadingIndicatorSrc: true,
-    defaultImageSrc: true,
-    imageTag: true,
-    progressHandlerRegistered: true,
     shouldNotifyLoadEvents: true,
   },
 };

@@ -9,13 +9,12 @@
 
 #import <tgmath.h>
 
-#import <AppKit/AppKit.h>
-
 #import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
-#import "RCTAssert.h"
-#import "RCTDefines.h"
+#import <React/RCTAssert.h>
+#import <React/RCTDefines.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -30,7 +29,7 @@ RCT_EXTERN id RCTJSONClean(id object);
 // Get MD5 hash of a string
 RCT_EXTERN NSString *RCTMD5Hash(NSString *string);
 
-// Check is we are currently on the main queue (not to be confused with
+// Check if we are currently on the main queue (not to be confused with
 // the main thread, which is not neccesarily the same thing)
 // https://twitter.com/olebegemann/status/738656134731599872
 RCT_EXTERN BOOL RCTIsMainQueue(void);
@@ -39,10 +38,9 @@ RCT_EXTERN BOOL RCTIsMainQueue(void);
 // this will execute immediately if we're already on the main queue.
 RCT_EXTERN void RCTExecuteOnMainQueue(dispatch_block_t block);
 
-// Deprecated - do not use.
-RCT_EXTERN void RCTExecuteOnMainThread(dispatch_block_t block, BOOL sync)
-__deprecated_msg("Use RCTExecuteOnMainQueue instead. RCTExecuteOnMainQueue is "
-                 "async. If you need to use the `sync` option... please don't.");
+// Legacy function to execute the specified block on the main queue synchronously.
+// Please do not use this unless you know what you're doing.
+RCT_EXTERN void RCTUnsafeExecuteOnMainQueueSync(dispatch_block_t block);
 
 // Get screen metrics in a thread-safe way
 RCT_EXTERN CGFloat RCTScreenScale(void);
@@ -80,33 +78,25 @@ RCT_EXTERN BOOL RCTRunningInTestEnvironment(void);
 RCT_EXTERN BOOL RCTRunningInAppExtension(void);
 
 // Returns the shared UIApplication instance, or nil if running in an App Extension
-RCT_EXTERN NSApplication *__nullable RCTSharedApplication(void);
+RCT_EXTERN UIApplication *__nullable RCTSharedApplication(void);
 
 // Returns the current main window, useful if you need to access the root view
-// or view controller, e.g. to present a modal view controller or alert.
-RCT_EXTERN NSWindow *__nullable RCTKeyWindow(void);
+// or view controller
+RCT_EXTERN UIWindow *__nullable RCTKeyWindow(void);
 
 // Returns the presented view controller, useful if you need
 // e.g. to present a modal view controller or alert over it
-RCT_EXTERN NSViewController *__nullable RCTPresentedViewController(void);
+RCT_EXTERN UIViewController *__nullable RCTPresentedViewController(void);
 
 // Does this device support force touch (aka 3D Touch)?
 RCT_EXTERN BOOL RCTForceTouchAvailable(void);
-
-// Return a UIAlertView initialized with the given values
-// or nil if running in an app extension
-RCT_EXTERN NSAlert *__nullable RCTAlertView(NSString *title,
-                                            NSString *__nullable message,
-                                            id __nullable delegate,
-                                            NSString *__nullable cancelButtonTitle,
-                                            NSArray<NSString *> *__nullable otherButtonTitles);
 
 // Create an NSError in the RCTErrorDomain
 RCT_EXTERN NSError *RCTErrorWithMessage(NSString *message);
 
 // Convert nil values to NSNull, and vice-versa
-RCT_EXTERN id __nullable RCTNilIfNull(id __nullable value);
-RCT_EXTERN id RCTNullIfNil(id __nullable value);
+#define RCTNullIfNil(value) (value ?: (id)kCFNull)
+#define RCTNilIfNull(value) (value == (id)kCFNull ? nil : value)
 
 // Convert NaN or infinite values to zero, as these aren't JSON-safe
 RCT_EXTERN double RCTZeroIfNaN(double value);

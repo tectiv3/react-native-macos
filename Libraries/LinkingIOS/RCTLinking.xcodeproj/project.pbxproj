@@ -85,6 +85,10 @@
 				LastUpgradeCheck = 0610;
 				ORGANIZATIONNAME = Facebook;
 				TargetAttributes = {
+					2D2A28461D9B043800D4039D = {
+						CreatedOnToolsVersion = 8.0;
+						ProvisioningStyle = Automatic;
+					};
 					58B511DA1A9E6C8500147676 = {
 						CreatedOnToolsVersion = 6.1.1;
 					};
@@ -108,6 +112,14 @@
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2D2A28431D9B043800D4039D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2D3B5F251D9B0DE600451313 /* RCTLinkingManager.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		58B511D71A9E6C8500147676 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -194,6 +206,10 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = macosx;
 				VALIDATE_PRODUCT = YES;
+				WARNING_CFLAGS = (
+					"-Werror",
+					"-Wall",
+				);
 			};
 			name = Release;
 		};

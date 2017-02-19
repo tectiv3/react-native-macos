@@ -31,7 +31,7 @@ esac
 REACT_NATIVE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Xcode project file for React Native apps is located in ios/ subfolder
-cd ..
+cd "${REACT_NATIVE_DIR}"/../..
 
 # Define NVM_DIR and source the nvm.sh setup script
 [ -z "$NVM_DIR" ] && export NVM_DIR="$HOME/.nvm"
@@ -72,15 +72,26 @@ if [[ "$CONFIGURATION" = "Debug" && "$PLATFORM_NAME" != "iphonesimulator" ]]; th
   PLISTBUDDY='/usr/libexec/PlistBuddy'
   PLIST=$TARGET_BUILD_DIR/$INFOPLIST_PATH
   IP=$(ipconfig getifaddr en0)
+  if [ -z "$IP" ]; then
+    IP=$(ifconfig | grep 'inet ' | grep -v 127.0.0.1 | cut -d\   -f2  | awk 'NR==1{print $1}')
+  fi
   $PLISTBUDDY -c "Add NSAppTransportSecurity:NSExceptionDomains:localhost:NSTemporaryExceptionAllowsInsecureHTTPLoads bool true" "$PLIST"
   $PLISTBUDDY -c "Add NSAppTransportSecurity:NSExceptionDomains:$IP.xip.io:NSTemporaryExceptionAllowsInsecureHTTPLoads bool true" "$PLIST"
   echo "$IP.xip.io" > "$DEST/ip.txt"
 fi
+
+BUNDLE_FILE="$DEST/main.jsbundle"
 
 $NODE_BINARY "$REACT_NATIVE_DIR/local-cli/cli.js" bundle \
   --entry-file "$ENTRY_FILE" \
   --platform macos \
   --dev $DEV \
   --reset-cache \
-  --bundle-output "$DEST/main.jsbundle" \
+  --bundle-output "$BUNDLE_FILE" \
   --assets-dest "$DEST"
+
+if [[ ! $DEV && ! -f "$BUNDLE_FILE" ]]; then
+  echo "error: File $BUNDLE_FILE does not exist. This must be a bug with" >&2
+  echo "React Native, please report it here: https://github.com/facebook/react-native/issues"
+  exit 2
+fi

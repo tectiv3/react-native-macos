@@ -7,9 +7,7 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import <Foundation/Foundation.h>
-#import <AppKit/AppKit.h>
-#import "NSView+React.h"
+#import <React/UIView+React.h>
 
 /**
  * ART nodes are implemented as empty UIViews but this is just an implementation detail to fit
@@ -17,7 +15,7 @@
  * thread.
  */
 
-@interface ARTNode : NSView
+@interface ARTNode : UIView
 
 @property (nonatomic, assign) CGFloat opacity;
 

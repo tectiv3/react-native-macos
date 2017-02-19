@@ -7,16 +7,17 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import <AppKit/AppKit.h>
-#import "NSView+React.h"
+#import <UIKit/UIKit.h>
 
-@interface RCTPicker : NSComboBox
+#import <React/UIView+React.h>
+
+@interface RCTPicker : UIPickerView
 
 @property (nonatomic, copy) NSArray<NSDictionary *> *items;
 @property (nonatomic, assign) NSInteger selectedIndex;
 
-@property (nonatomic, strong) NSColor *color;
-@property (nonatomic, strong) NSFont *font;
+@property (nonatomic, strong) UIColor *color;
+@property (nonatomic, strong) UIFont *font;
 @property (nonatomic, assign) NSTextAlignment textAlign;
 
 @property (nonatomic, copy) RCTBubblingEventBlock onChange;

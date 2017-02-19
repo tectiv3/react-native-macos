@@ -7,14 +7,15 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import "AppKit/AppKit.h"
-#import "RCTViewManager.h"
-#import "RCTConvert.h"
+#import <React/RCTConvert.h>
+#import <React/RCTViewManager.h>
 
-/**
- * Workaround for a AppKit NSScrollView
- *
- */
-@interface RCTNativeScrollViewManager : RCTViewManager
+@interface RCTConvert (UIScrollView)
+
++ (UIScrollViewKeyboardDismissMode)UIScrollViewKeyboardDismissMode:(id)json;
+
+@end
+
+@interface RCTScrollViewManager : RCTViewManager
 
 @end

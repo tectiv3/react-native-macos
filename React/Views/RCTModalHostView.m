@@ -9,12 +9,14 @@
 
 #import "RCTModalHostView.h"
 
+#import <UIKit/UIKit.h>
+
 #import "RCTAssert.h"
 #import "RCTBridge.h"
 #import "RCTModalHostViewController.h"
 #import "RCTTouchHandler.h"
 #import "RCTUIManager.h"
-#import "NSView+React.h"
+#import "UIView+React.h"
 
 @implementation RCTModalHostView
 {
@@ -22,7 +24,10 @@
   BOOL _isPresented;
   RCTModalHostViewController *_modalViewController;
   RCTTouchHandler *_touchHandler;
-  NSView *_reactSubview;
+  UIView *_reactSubview;
+#if !TARGET_OS_TV
+  UIInterfaceOrientation _lastKnownOrientation;
+#endif
 }
 
 RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
@@ -32,28 +37,16 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:coder)
 {
   if ((self = [super initWithFrame:CGRectZero])) {
     _bridge = bridge;
-    _modalViewController = [[RCTModalHostViewController alloc] initWithNibName:nil bundle:nil];
-
-    NSRect windowFrame = [NSApp mainWindow].frame;
-    NSRect frame = NSMakeRect(windowFrame.origin.x, windowFrame.origin.y,
-                              windowFrame.size.width, windowFrame.size.height - 100);
-
-    _containerView = [[NSView alloc] initWithFrame:frame];
-    _containerView.autoresizingMask = NSViewMaxXMargin | NSViewMaxYMargin;
-    _modalViewController.view = _containerView;
-    _modalViewController.title = [NSApp mainWindow].title;
+    _modalViewController = [RCTModalHostViewController new];
+    UIView *containerView = [UIView new];
+    containerView.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
+    _modalViewController.view = containerView;
     _touchHandler = [[RCTTouchHandler alloc] initWithBridge:bridge];
     _isPresented = NO;
 
     __weak typeof(self) weakSelf = self;
     _modalViewController.boundsDidChangeBlock = ^(CGRect newBounds) {
       [weakSelf notifyForBoundsChange:newBounds];
-    };
-    _modalViewController.initCompletionHandler = ^(NSWindow *modal) {
-      modal.delegate = weakSelf;
-    };
-    _modalViewController.closeCompletionHandler = ^{
-      [self dismissModalViewController];
     };
   }
 
@@ -63,26 +56,50 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:coder)
 - (void)notifyForBoundsChange:(CGRect)newBounds
 {
   if (_reactSubview && _isPresented) {
-    [_bridge.uiManager setFrame:newBounds forView:_reactSubview];
+    [_bridge.uiManager setSize:newBounds.size forView:_reactSubview];
+    [self notifyForOrientationChange];
   }
 }
 
-- (void)insertReactSubview:(NSView *)subview atIndex:(NSInteger)atIndex
+- (void)notifyForOrientationChange
+{
+#if !TARGET_OS_TV
+  if (!_onOrientationChange) {
+    return;
+  }
+
+  UIInterfaceOrientation currentOrientation = [[UIApplication sharedApplication] statusBarOrientation];
+  if (currentOrientation == _lastKnownOrientation) {
+    return;
+  }
+  _lastKnownOrientation = currentOrientation;
+
+  BOOL isPortrait = currentOrientation == UIInterfaceOrientationPortrait || currentOrientation == UIInterfaceOrientationPortraitUpsideDown;
+  NSDictionary *eventPayload =
+  @{
+    @"orientation": isPortrait ? @"portrait" : @"landscape",
+    };
+  _onOrientationChange(eventPayload);
+#endif
+}
+
+- (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex
 {
   RCTAssert(_reactSubview == nil, @"Modal view can only have one subview");
   [super insertReactSubview:subview atIndex:atIndex];
-  [subview addGestureRecognizer:_touchHandler];
-  subview.autoresizingMask = NSViewMaxXMargin | NSViewMaxYMargin;
+  [_touchHandler attachToView:subview];
+  subview.autoresizingMask = UIViewAutoresizingFlexibleHeight |
+                             UIViewAutoresizingFlexibleWidth;
 
-  [_modalViewController.view addSubview:subview];
+  [_modalViewController.view insertSubview:subview atIndex:0];
   _reactSubview = subview;
 }
 
-- (void)removeReactSubview:(NSView *)subview
+- (void)removeReactSubview:(UIView *)subview
 {
   RCTAssert(subview == _reactSubview, @"Cannot remove view other than modal view");
   [super removeReactSubview:subview];
-  [subview removeGestureRecognizer:_touchHandler];
+  [_touchHandler detachFromView:subview];
   _reactSubview = nil;
 }
 
@@ -94,43 +111,34 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:coder)
 - (void)dismissModalViewController
 {
   if (_isPresented) {
-    // [self.reactViewController dismissViewController:_modalViewController];
+    [_delegate dismissModalHostView:self withViewController:_modalViewController animated:[self hasAnimationType]];
     _isPresented = NO;
-    _onRequestClose(nil);
   }
 }
 
-- (void)viewDidMoveToWindow
+- (void)didMoveToWindow
 {
-  [super viewDidMoveToWindow];
+  [super didMoveToWindow];
+
   if (!_isPresented && self.window) {
     RCTAssert(self.reactViewController, @"Can't present modal view controller without a presenting view controller");
 
-    if ([self.presentationType isEqualToString:@"window"]) {
-      [self.reactViewController presentViewControllerAsModalWindow:_modalViewController];
-      [NSApp modalWindow].delegate = self;
-    } else if ([self.presentationType isEqualToString:@"sheet"]) {
-      [self.reactViewController presentViewControllerAsSheet:_modalViewController];
-    } else if ([self.presentationType isEqualToString:@"popover"]) {
-      // TODO: Pass the real positioning view
-      [self.reactViewController presentViewController:_modalViewController
-          asPopoverRelativeToRect:self.frame
-                           ofView:self
-                    preferredEdge:NSMinYEdge
-                         behavior:NSPopoverBehaviorTransient];
+#if !TARGET_OS_TV
+    _modalViewController.supportedInterfaceOrientations = [self supportedOrientationsMask];
+#endif
+    if ([self.animationType isEqualToString:@"fade"]) {
+      _modalViewController.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    } else if ([self.animationType isEqualToString:@"slide"]) {
+      _modalViewController.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
     }
-
-    if (_onShow) {
-      _onShow(nil);
-    }
-
+    [_delegate presentModalHostView:self withViewController:_modalViewController animated:[self hasAnimationType]];
     _isPresented = YES;
   }
 }
 
-- (void)viewDidMoveToSuperview
+- (void)didMoveToSuperview
 {
-  [super viewDidMoveToSuperview];
+  [super didMoveToSuperview];
 
   if (_isPresented && !self.superview) {
     [self dismissModalViewController];
@@ -146,7 +154,7 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:coder)
 
 - (BOOL)isTransparent
 {
-  return YES; //return _modalViewController.modalPresentationStyle == UIModalPresentationCustom;
+  return _modalViewController.modalPresentationStyle == UIModalPresentationOverFullScreen;
 }
 
 - (BOOL)hasAnimationType
@@ -156,27 +164,36 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:coder)
 
 - (void)setTransparent:(BOOL)transparent
 {
-  //  _modalViewController.modalPresentationStyle = transparent ? UIModalPresentationCustom : UIModalPresentationFullScreen;
+  _modalViewController.modalPresentationStyle = transparent ? UIModalPresentationOverFullScreen : UIModalPresentationFullScreen;
 }
 
-- (void)setWidth:(NSNumber *)width
+#if !TARGET_OS_TV
+- (UIInterfaceOrientationMask)supportedOrientationsMask
 {
-  NSRect frame = self.containerView.frame;
-  [self.containerView setFrame:NSMakeRect(frame.origin.x, frame.origin.y, width.floatValue, frame.size.height)];
-}
+  if (_supportedOrientations.count == 0) {
+    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+      return UIInterfaceOrientationMaskAll;
+    } else {
+      return UIInterfaceOrientationMaskPortrait;
+    }
+  }
 
-- (void)setHeight:(NSNumber *)height
-{
-  NSRect frame = self.containerView.frame;
-  [self.containerView setFrame:NSMakeRect(frame.origin.x, frame.origin.y, frame.size.width, height.floatValue)];
+  UIInterfaceOrientationMask supportedOrientations = 0;
+  for (NSString *orientation in _supportedOrientations) {
+    if ([orientation isEqualToString:@"portrait"]) {
+      supportedOrientations |= UIInterfaceOrientationMaskPortrait;
+    } else if ([orientation isEqualToString:@"portrait-upside-down"]) {
+      supportedOrientations |= UIInterfaceOrientationMaskPortraitUpsideDown;
+    } else if ([orientation isEqualToString:@"landscape"]) {
+      supportedOrientations |= UIInterfaceOrientationMaskLandscape;
+    } else if ([orientation isEqualToString:@"landscape-left"]) {
+      supportedOrientations |= UIInterfaceOrientationMaskLandscapeLeft;
+    } else if ([orientation isEqualToString:@"landscape-right"]) {
+      supportedOrientations |= UIInterfaceOrientationMaskLandscapeRight;
+    }
+  }
+  return supportedOrientations;
 }
-
-- (BOOL)windowShouldClose:(NSNotification *)notification
-{
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self dismissModalViewController];
-  });
-  return NO;
-}
+#endif
 
 @end

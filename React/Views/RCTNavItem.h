@@ -7,31 +7,33 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import <AppKit/AppKit.h>
+#import <UIKit/UIKit.h>
 
-#import "RCTComponent.h"
+#import <React/RCTComponent.h>
 
-@interface RCTNavItem : NSView
+@interface RCTNavItem : UIView
 
 @property (nonatomic, copy) NSString *title;
-@property (nonatomic, strong) NSImage *titleImage;
-@property (nonatomic, strong) NSImage *leftButtonIcon;
+@property (nonatomic, strong) UIImage *titleImage;
+@property (nonatomic, strong) UIImage *leftButtonIcon;
 @property (nonatomic, copy) NSString *leftButtonTitle;
-@property (nonatomic, strong) NSImage *rightButtonIcon;
+@property (nonatomic, assign) UIBarButtonSystemItem leftButtonSystemIcon;
+@property (nonatomic, strong) UIImage *rightButtonIcon;
 @property (nonatomic, copy) NSString *rightButtonTitle;
-@property (nonatomic, strong) NSImage *backButtonIcon;
+@property (nonatomic, assign) UIBarButtonSystemItem rightButtonSystemIcon;
+@property (nonatomic, strong) UIImage *backButtonIcon;
 @property (nonatomic, copy) NSString *backButtonTitle;
 @property (nonatomic, assign) BOOL navigationBarHidden;
 @property (nonatomic, assign) BOOL shadowHidden;
-@property (nonatomic, strong) NSColor *tintColor;
-@property (nonatomic, strong) NSColor *barTintColor;
-@property (nonatomic, strong) NSColor *titleTextColor;
+@property (nonatomic, strong) UIColor *tintColor;
+@property (nonatomic, strong) UIColor *barTintColor;
+@property (nonatomic, strong) UIColor *titleTextColor;
 @property (nonatomic, assign) BOOL translucent;
 
-// @property (nonatomic, readonly) UIImageView *titleImageView;
-// @property (nonatomic, readonly) UIBarButtonItem *backButtonItem;
-// @property (nonatomic, readonly) UIBarButtonItem *leftButtonItem;
-// @property (nonatomic, readonly) UIBarButtonItem *rightButtonItem;
+@property (nonatomic, readonly) UIImageView *titleImageView;
+@property (nonatomic, readonly) UIBarButtonItem *backButtonItem;
+@property (nonatomic, readonly) UIBarButtonItem *leftButtonItem;
+@property (nonatomic, readonly) UIBarButtonItem *rightButtonItem;
 
 @property (nonatomic, copy) RCTBubblingEventBlock onLeftButtonPress;
 @property (nonatomic, copy) RCTBubblingEventBlock onRightButtonPress;

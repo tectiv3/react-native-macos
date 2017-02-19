@@ -7,13 +7,13 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import <AppKit/AppKit.h>
+#import <UIKit/UIKit.h>
 
-#import "RCTBridge.h"
-#import "RCTBridgeModule.h"
-#import "RCTInvalidating.h"
-#import "RCTViewManager.h"
-#import "RCTRootView.h"
+#import <React/RCTBridge.h>
+#import <React/RCTBridgeModule.h>
+#import <React/RCTInvalidating.h>
+#import <React/RCTRootView.h>
+#import <React/RCTViewManager.h>
 
 /**
  * UIManager queue
@@ -58,31 +58,36 @@ RCT_EXTERN NSString *const RCTUIManagerRootViewKey;
 /**
  * Register a root view with the RCTUIManager.
  */
-- (void)registerRootView:(NSView *)rootView withSizeFlexibility:(RCTRootViewSizeFlexibility)sizeFlexibility;
+- (void)registerRootView:(UIView *)rootView withSizeFlexibility:(RCTRootViewSizeFlexibility)sizeFlexibility;
+
+/**
+ * Gets the view name associated with a reactTag.
+ */
+- (NSString *)viewNameForReactTag:(NSNumber *)reactTag;
 
 /**
  * Gets the view associated with a reactTag.
  */
-- (NSView *)viewForReactTag:(NSNumber *)reactTag;
+- (UIView *)viewForReactTag:(NSNumber *)reactTag;
 
 /**
- * Update the frame of a view. This might be in response to a screen rotation
+ * Set the size of a view. This might be in response to a screen rotation
  * or some other layout event outside of the React-managed view hierarchy.
  */
-- (void)setFrame:(CGRect)frame forView:(NSView *)view;
+- (void)setSize:(CGSize)size forView:(UIView *)view;
 
 /**
  * Set the natural size of a view, which is used when no explicit size is set.
  * Use UIViewNoIntrinsicMetric to ignore a dimension.
  */
-- (void)setIntrinsicContentSize:(CGSize)size forView:(NSView *)view;
+- (void)setIntrinsicContentSize:(CGSize)size forView:(UIView *)view;
 
 /**
  * Update the background color of a view. The source of truth for
  * backgroundColor is the shadow view, so if to update backgroundColor from
  * native code you will need to call this method.
  */
-- (void)setBackgroundColor:(NSColor *)color forView:(NSView *)rootView;
+- (void)setBackgroundColor:(UIColor *)color forView:(UIView *)view;
 
 /**
  * Schedule a block to be executed on the UI thread. Useful if you need to execute
@@ -91,9 +96,29 @@ RCT_EXTERN NSString *const RCTUIManagerRootViewKey;
 - (void)addUIBlock:(RCTViewManagerUIBlock)block;
 
 /**
+ * Used by native animated module to bypass the process of updating the values through the shadow
+ * view hierarchy. This method will directly update native views, which means that updates for
+ * layout-related propertied won't be handled properly.
+ * Make sure you know what you're doing before calling this method :)
+ */
+- (void)synchronouslyUpdateViewOnUIThread:(NSNumber *)reactTag
+                                 viewName:(NSString *)viewName
+                                    props:(NSDictionary *)props;
+
+/**
+ * Given a reactTag from a component, find its root view, if possible.
+ * Otherwise, this will give back nil.
+ *
+ * @param reactTag the component tag
+ * @param completion the completion block that will hand over the rootView, if any.
+ *
+ */
+- (void)rootViewForReactTag:(NSNumber *)reactTag withCompletion:(void (^)(UIView *view))completion;
+
+/**
  * The view that is currently first responder, according to the JS context.
  */
-+ (NSView *)JSResponder;
++ (UIView *)JSResponder;
 
 /**
  * Normally, UI changes are not applied until the complete batch of method
@@ -111,6 +136,18 @@ RCT_EXTERN NSString *const RCTUIManagerRootViewKey;
  * React won't be aware of this, so we need to make sure it happens.
  */
 - (void)setNeedsLayout;
+
+@end
+
+@interface RCTUIManager (Deprecated)
+
+/**
+ * This method is deprecated and will be removed in next releases.
+ * Use `setSize:forView:` or `setIntrinsicContentSize:forView:` instead.
+ * Only frames with `origin` equals {0, 0} are supported.
+ */
+- (void)setFrame:(CGRect)frame forView:(UIView *)view
+__deprecated_msg("Use `setSize:forView:` or `setIntrinsicContentSize:forView:` instead.");
 
 @end
 

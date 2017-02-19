@@ -9,14 +9,13 @@
 
 #import "RCTImageUtils.h"
 
-
-#import <ImageIO/ImageIO.h>
 #import <tgmath.h>
 
-#import "UIImageUtils.h"
-#import "RCTLog.h"
-#import "RCTImageLoader.h"
-#import "RCTUtils.h"
+#import <ImageIO/ImageIO.h>
+#import <MobileCoreServices/UTCoreTypes.h>
+
+#import <React/RCTLog.h>
+#import <React/RCTUtils.h>
 
 static CGFloat RCTCeilValue(CGFloat value, CGFloat scale)
 {
@@ -92,6 +91,7 @@ CGRect RCTTargetRect(CGSize sourceSize, CGSize destSize,
       };
 
     case RCTResizeModeCover:
+
       if (targetAspect <= aspect) { // target is taller than content
 
         sourceSize.height = destSize.height;
@@ -197,7 +197,7 @@ BOOL RCTUpscalingRequired(CGSize sourceSize, CGFloat sourceScale,
 
   // Calculate aspect ratios if needed (don't bother if resizeMode == stretch)
   CGFloat aspect = 0.0, targetAspect = 0.0;
-  if (resizeMode != RCTResizeModeStretch) {
+  if (resizeMode != UIViewContentModeScaleToFill) {
     aspect = sourceSize.width / sourceSize.height;
     targetAspect = destSize.width / destSize.height;
     if (aspect == targetAspect) {
@@ -239,7 +239,7 @@ BOOL RCTUpscalingRequired(CGSize sourceSize, CGFloat sourceScale,
   }
 }
 
-NSImage *__nullable RCTDecodeImageWithData(NSData *data,
+UIImage *__nullable RCTDecodeImageWithData(NSData *data,
                                            CGSize destSize,
                                            CGFloat destScale,
                                            RCTResizeMode resizeMode)
@@ -269,7 +269,7 @@ NSImage *__nullable RCTDecodeImageWithData(NSData *data,
     destScale = RCTScreenScale();
   }
 
-  if (resizeMode == RCTResizeModeStretch) {
+  if (resizeMode == UIViewContentModeScaleToFill) {
     // Decoder cannot change aspect ratio, so RCTResizeModeStretch is equivalent
     // to RCTResizeModeCover for our purposes
     resizeMode = RCTResizeModeCover;
@@ -296,7 +296,9 @@ NSImage *__nullable RCTDecodeImageWithData(NSData *data,
   }
 
   // Return image
-  NSImage *image = [[NSImage alloc] initWithCGImage:imageRef size:targetSize];
+  UIImage *image = [UIImage imageWithCGImage:imageRef
+                                       scale:destScale
+                                 orientation:UIImageOrientationUp];
   CGImageRelease(imageRef);
   return image;
 }
@@ -335,14 +337,7 @@ NSData *__nullable RCTGetImageData(CGImageRef image, float quality)
   return (__bridge_transfer NSData *)imageData;
 }
 
-CGImageRef RCTGetCGImage(NSImage *image)
-{
-//  CGImageSourceRef source = CGImageSourceCreateWithData((CFDataRef)[image TIFFRepresentation], NULL);
-//  return CGImageSourceCreateImageAtIndex(source, 0, NULL);
-  return [image CGImageForProposedRect:nil context:nil hints:nil];
-}
-
-NSImage *__nullable RCTTransformImage(NSImage *image,
+UIImage *__nullable RCTTransformImage(UIImage *image,
                                       CGSize destSize,
                                       CGFloat destScale,
                                       CGAffineTransform transform)
@@ -351,12 +346,12 @@ NSImage *__nullable RCTTransformImage(NSImage *image,
     return nil;
   }
 
-  BOOL opaque = !RCTImageHasAlpha(RCTGetCGImage(image));
+  BOOL opaque = !RCTImageHasAlpha(image.CGImage);
   UIGraphicsBeginImageContextWithOptions(destSize, opaque, destScale);
   CGContextRef currentContext = UIGraphicsGetCurrentContext();
   CGContextConcatCTM(currentContext, transform);
-  [image drawInRect:NSMakeRect(0, 0, destSize.width, destSize.height)];
-  NSImage *result = UIGraphicsGetImageFromCurrentImageContext();
+  [image drawAtPoint:CGPointZero];
+  UIImage *result = UIGraphicsGetImageFromCurrentImageContext();
   UIGraphicsEndImageContext();
   return result;
 }

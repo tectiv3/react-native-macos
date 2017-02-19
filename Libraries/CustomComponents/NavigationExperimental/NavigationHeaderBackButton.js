@@ -27,6 +27,7 @@ const React = require('React');
 const ReactNative = require('react-native');
 
 const {
+  I18nManager,
   Image,
   Platform,
   StyleSheet,
@@ -34,12 +35,14 @@ const {
 } = ReactNative;
 
 type Props = {
+  imageStyle?: any,
   onPress: Function,
+  style?: any,
 };
 
 const NavigationHeaderBackButton = (props: Props) => (
-  <TouchableOpacity style={styles.buttonContainer} onPress={props.onPress}>
-    <Image style={styles.button} source={require('./assets/back-icon.png')} />
+  <TouchableOpacity style={[styles.buttonContainer, props.style]} onPress={props.onPress}>
+    <Image style={[styles.button, props.imageStyle]} source={require('./assets/back-icon.png')} />
   </TouchableOpacity>
 );
 
@@ -58,7 +61,8 @@ const styles = StyleSheet.create({
     height: 24,
     width: 24,
     margin: Platform.OS === 'ios' ? 10 : 16,
-    resizeMode: 'contain'
+    resizeMode: 'contain',
+    transform: [{scaleX: I18nManager.isRTL ? -1 : 1}],
   }
 });
 

@@ -27,8 +27,9 @@ const AsyncStorage = require('AsyncStorage');
 const Linking = require('Linking');
 const React = require('react');
 const ReactNative = require('react-native');
-const UIExplorerList = require('./UIExplorerList.ios');
+const UIExplorerExampleContainer = require('./UIExplorerExampleContainer');
 const UIExplorerExampleList = require('./UIExplorerExampleList');
+const UIExplorerList = require('./UIExplorerList.ios');
 const UIExplorerNavigationReducer = require('./UIExplorerNavigationReducer');
 const UIExplorerStateTitleMap = require('./UIExplorerStateTitleMap');
 const URIActionMap = require('./URIActionMap');
@@ -114,8 +115,10 @@ class UIExplorerApp extends React.Component {
     }
     const newState = UIExplorerNavigationReducer(this.state, action);
     if (this.state !== newState) {
-      this.setState(newState);
-      AsyncStorage.setItem(APP_STATE_KEY, JSON.stringify(this.state));
+      this.setState(
+        newState,
+        () => AsyncStorage.setItem(APP_STATE_KEY, JSON.stringify(this.state))
+      );
     }
   }
 
@@ -144,7 +147,7 @@ class UIExplorerApp extends React.Component {
     );
   }
 
-  _renderHeader(props: NavigationSceneRendererProps): ReactElement<any> {
+  _renderHeader(props: NavigationSceneRendererProps): React.Element<any> {
     return (
       <NavigationHeader
         {...props}
@@ -154,7 +157,7 @@ class UIExplorerApp extends React.Component {
     );
   }
 
-  _renderTitleComponent(props: NavigationSceneRendererProps): ReactElement<any> {
+  _renderTitleComponent(props: NavigationSceneRendererProps): React.Element<any> {
     return (
       <NavigationHeader.Title>
         {UIExplorerStateTitleMap(props.scene.route)}
@@ -162,7 +165,7 @@ class UIExplorerApp extends React.Component {
     );
   }
 
-  _renderScene(props: NavigationSceneRendererProps): ?ReactElement<any> {
+  _renderScene(props: NavigationSceneRendererProps): ?React.Element<any> {
     const state = props.scene.route;
     if (state.key === 'AppList') {
       return (
@@ -177,10 +180,9 @@ class UIExplorerApp extends React.Component {
 
     const Example = UIExplorerList.Modules[state.key];
     if (Example) {
-      const Component = UIExplorerExampleList.makeRenderable(Example);
       return (
         <View style={styles.exampleContainer}>
-          <Component />
+          <UIExplorerExampleContainer module={Example} />
         </View>
       );
     }
@@ -207,10 +209,9 @@ UIExplorerList.ComponentExamples.concat(UIExplorerList.APIExamples).forEach((Exa
   if (ExampleModule.displayName) {
     class Snapshotter extends React.Component {
       render() {
-        const Renderable = UIExplorerExampleList.makeRenderable(ExampleModule);
         return (
           <SnapshotViewIOS>
-            <Renderable />
+            <UIExplorerExampleContainer module={ExampleModule} />
           </SnapshotViewIOS>
         );
       }

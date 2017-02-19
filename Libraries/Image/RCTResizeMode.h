@@ -7,15 +7,14 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import "RCTConvert.h"
-#import "AppKit/AppKit.h"
+#import <React/RCTConvert.h>
 
 typedef NS_ENUM(NSInteger, RCTResizeMode) {
-  RCTResizeModeContain = 0,
-  RCTResizeModeCover = 1,
-  RCTResizeModeStretch = 2,
-  RCTResizeModeCenter = 3,
-  RCTResizeModeRepeat = -1,
+  RCTResizeModeCover = UIViewContentModeScaleAspectFill,
+  RCTResizeModeContain = UIViewContentModeScaleAspectFit,
+  RCTResizeModeStretch = UIViewContentModeScaleToFill,
+  RCTResizeModeCenter = UIViewContentModeCenter,
+  RCTResizeModeRepeat = -1, // Use negative values to avoid conflicts with iOS enum values.
 };
 
 @interface RCTConvert(RCTResizeMode)

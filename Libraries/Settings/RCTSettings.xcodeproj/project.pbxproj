@@ -10,18 +10,6 @@
 		13DBA45E1AEE749000A17CF8 /* RCTSettingsManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 13DBA45D1AEE749000A17CF8 /* RCTSettingsManager.m */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		58B511D91A9E6C8500147676 /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "include/$(PRODUCT_NAME)";
-			dstSubfolderSpec = 16;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
 		134814201AA4EA6300B7C361 /* libRCTSettings.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libRCTSettings.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		13DBA45C1AEE749000A17CF8 /* RCTSettingsManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTSettingsManager.h; sourceTree = "<group>"; };
@@ -64,8 +52,6 @@
 			buildConfigurationList = 58B511EF1A9E6C8500147676 /* Build configuration list for PBXNativeTarget "RCTSettings" */;
 			buildPhases = (
 				58B511D71A9E6C8500147676 /* Sources */,
-				58B511D81A9E6C8500147676 /* Frameworks */,
-				58B511D91A9E6C8500147676 /* CopyFiles */,
 			);
 			buildRules = (
 			);

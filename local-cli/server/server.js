@@ -12,17 +12,12 @@ const chalk = require('chalk');
 const formatBanner = require('./formatBanner');
 const path = require('path');
 const runServer = require('./runServer');
-const findSymlinksPaths = require('./findSymlinksPaths');
-const NODE_MODULES = path.resolve(__dirname, '..', '..', '..');
 
 /**
  * Starts the React Native Packager Server.
  */
 function server(argv, config, args) {
-  args.projectRoots = args.projectRoots.concat(
-    args.root,
-    findSymlinksPaths(NODE_MODULES)
-  );
+  args.projectRoots.concat(args.root);
 
   console.log(formatBanner(
     'Running packager on port ' + args.port + '.\n\n' +
@@ -50,8 +45,8 @@ function server(argv, config, args) {
       );
       console.log('Most likely another process is already using this port');
       console.log('Run the following command to find out which process:');
-      console.log('\n  ', chalk.bold('lsof -n -i4TCP:' + args.port), '\n');
-      console.log('You can either shut down the other process:');
+      console.log('\n  ', chalk.bold('lsof -i :' + args.port), '\n');
+      console.log('Then, you can either shut down the other process:');
       console.log('\n  ', chalk.bold('kill -9 <PID>'), '\n');
       console.log('or run packager on different port.');
     } else {
@@ -64,7 +59,7 @@ function server(argv, config, args) {
     }
     console.log('\nSee', chalk.underline('http://facebook.github.io/react-native/docs/troubleshooting.html'));
     console.log('for common problems and solutions.');
-    process.exit(1);
+    process.exit(11);
   });
 
   runServer(args, config, () => console.log('\nReact packager ready.\n'));
@@ -92,15 +87,25 @@ module.exports = {
     parse: (val) => val.split(','),
     default: (config) => config.getProjectRoots(),
   }, {
-    command: '--assetRoots [list]',
-    description: 'specify the root directories of app assets',
-    parse: (val) => val.split(',').map(dir => path.resolve(process.cwd(), dir)),
-    default: (config) => config.getAssetRoots(),
-  }, {
     command: '--assetExts [list]',
     description: 'Specify any additional asset extentions to be used by the packager',
     parse: (val) => val.split(','),
     default: (config) => config.getAssetExts(),
+  }, {
+    command: '--platforms [list]',
+    description: 'Specify any additional platforms to be used by the packager',
+    parse: (val) => val.split(','),
+    default: (config) => config.getPlatforms(),
+  }, {
+    command: '--providesModuleNodeModules [list]',
+    description: 'Specify any npm packages that import dependencies with providesModule',
+    parse: (val) => val.split(','),
+    default: (config) => {
+      if (typeof config.getProvidesModuleNodeModules === 'function') {
+        return config.getProvidesModuleNodeModules();
+      }
+      return null;
+    },
   }, {
     command: '--skipflow',
     description: 'Disable flow checks'
@@ -109,8 +114,7 @@ module.exports = {
     description: 'Disable file watcher'
   }, {
     command: '--transformer [string]',
-    default: require.resolve('../../packager/transformer'),
-    description: 'Specify a custom transformer to be used (absolute path)'
+    description: 'Specify a custom transformer to be used'
   }, {
     command: '--reset-cache, --resetCache',
     description: 'Removes cached files',

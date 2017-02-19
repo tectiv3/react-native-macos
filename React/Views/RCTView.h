@@ -7,19 +7,18 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import "RCTView.h"
+#import <UIKit/UIKit.h>
 
-#import <AppKit/AppKit.h>
-
-#import "RCTBorderStyle.h"
-#import "RCTComponent.h"
-#import "RCTPointerEvents.h"
+#import <React/RCTBorderStyle.h>
+#import <React/RCTComponent.h>
+#import <React/RCTPointerEvents.h>
+#import <React/RCTView.h>
 
 @protocol RCTAutoInsetsProtocol;
 
 @class RCTView;
 
-@interface RCTView : NSView
+@interface RCTView : UIView
 
 /**
  * Accessibility event handlers
@@ -32,16 +31,21 @@
  */
 @property (nonatomic, assign) RCTPointerEvents pointerEvents;
 
-+ (void)autoAdjustInsetsForView:(NSView<RCTAutoInsetsProtocol> *)parentView
-                 withScrollView:(NSScrollView *)scrollView
++ (void)autoAdjustInsetsForView:(UIView<RCTAutoInsetsProtocol> *)parentView
+                 withScrollView:(UIScrollView *)scrollView
                    updateOffset:(BOOL)updateOffset;
 
 /**
  * Find the first view controller whose view, or any subview is the specified view.
  */
-+ (NSEdgeInsets)contentInsetsForView:(NSView *)curView;
++ (UIEdgeInsets)contentInsetsForView:(UIView *)curView;
 
-- (void)setBackgroundColor:(NSColor *)backgroundColor;
+/**
+ * Layout direction of the view.
+ * This is inherited from UIView+React, but we override it here
+ * to improve perfomance and make subclassing/overriding possible/easier.
+ */
+@property (nonatomic, assign) UIUserInterfaceLayoutDirection reactLayoutDirection;
 
 /**
  * z-index, used to override sibling order in didUpdateReactSubviews. This is
@@ -58,12 +62,6 @@
  * is called. This would typically be triggered by a scroll event
  */
 @property (nonatomic, assign) BOOL removeClippedSubviews;
-
-/**
- * Workaround on a lot of views with layers
- */
-@property (nonatomic, assign) BOOL respondsToLiveResizing;
-
 
 /**
  * Hide subviews if they are outside the view bounds.
@@ -101,18 +99,13 @@
 @property (nonatomic, assign) CGFloat borderWidth;
 
 /**
- * Initial tranformation for a view which is not rendered yet
- */
-@property (nonatomic, assign) CATransform3D transform;
-@property (nonatomic, assign) bool shouldBeTransformed;
-
-@property (nonatomic, copy) RCTDirectEventBlock onDragEnter;
-@property (nonatomic, copy) RCTDirectEventBlock onDragLeave;
-@property (nonatomic, copy) RCTDirectEventBlock onDrop;
-/**
  * Border styles.
  */
 @property (nonatomic, assign) RCTBorderStyle borderStyle;
 
+/**
+ *  Insets used when hit testing inside this view.
+ */
+@property (nonatomic, assign) UIEdgeInsets hitTestEdgeInsets;
 
 @end

@@ -9,8 +9,7 @@
 
 #import "RCTWebView.h"
 
-#import <AppKit/AppKit.h>
-#import <WebKit/WebKit.h>
+#import <UIKit/UIKit.h>
 
 #import "RCTAutoInsetsProtocol.h"
 #import "RCTConvert.h"
@@ -18,12 +17,12 @@
 #import "RCTLog.h"
 #import "RCTUtils.h"
 #import "RCTView.h"
-#import "NSView+React.h"
+#import "UIView+React.h"
 
 NSString *const RCTJSNavigationScheme = @"react-js-navigation";
 NSString *const RCTJSPostMessageHost = @"postMessage";
 
-@interface RCTWebView () <WebFrameLoadDelegate, WebResourceLoadDelegate, RCTAutoInsetsProtocol>
+@interface RCTWebView () <UIWebViewDelegate, RCTAutoInsetsProtocol>
 
 @property (nonatomic, copy) RCTDirectEventBlock onLoadingStart;
 @property (nonatomic, copy) RCTDirectEventBlock onLoadingFinish;
@@ -35,29 +34,23 @@ NSString *const RCTJSPostMessageHost = @"postMessage";
 
 @implementation RCTWebView
 {
-  WebView *_webView;
+  UIWebView *_webView;
   NSString *_injectedJavaScript;
 }
 
 - (void)dealloc
 {
-  _webView.frameLoadDelegate = nil;
-  _webView.resourceLoadDelegate = nil;
+  _webView.delegate = nil;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
 {
   if ((self = [super initWithFrame:frame])) {
-    CALayer *viewLayer = [CALayer layer];
-    [viewLayer setBackgroundColor:[[NSColor clearColor] CGColor]]; //RGB plus Alpha Channel
-    [self setWantsLayer:YES]; // view's backing store is using a Core Animation Layer
-    [self setLayer:viewLayer];
+    super.backgroundColor = [UIColor clearColor];
     _automaticallyAdjustContentInsets = YES;
-    _contentInset = NSEdgeInsetsZero;
-    _webView = [[WebView alloc] initWithFrame:self.bounds];
-    [WebView registerURLSchemeAsLocal:RCTJSNavigationScheme];
-    [_webView setFrameLoadDelegate:self];
-    [_webView setResourceLoadDelegate:self];
+    _contentInset = UIEdgeInsetsZero;
+    _webView = [[UIWebView alloc] initWithFrame:self.bounds];
+    _webView.delegate = self;
     [self addSubview:_webView];
   }
   return self;
@@ -77,30 +70,35 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 
 - (void)reload
 {
-  [_webView reload:self];
-}
-
-- (void)reactSetFrame:(CGRect)frame
-{
-  [super reactSetFrame:frame];
-  [_webView setFrame:frame];
+  NSURLRequest *request = [RCTConvert NSURLRequest:self.source];
+  if (request.URL && !_webView.request.URL.absoluteString.length) {
+    [_webView loadRequest:request];
+  }
+  else {
+    [_webView reload];
+  }
 }
 
 - (void)stopLoading
 {
-  [_webView.webFrame stopLoading];
+  [_webView stopLoading];
 }
 
 - (void)postMessage:(NSString *)message
 {
   NSDictionary *eventInitDict = @{
-                                  @"data": message,
-                                  };
+    @"data": message,
+  };
   NSString *source = [NSString
-                      stringWithFormat:@"document.dispatchEvent(new MessageEvent('message', %@));",
-                      RCTJSONStringify(eventInitDict, NULL)
-                      ];
+    stringWithFormat:@"document.dispatchEvent(new MessageEvent('message', %@));",
+    RCTJSONStringify(eventInitDict, NULL)
+  ];
   [_webView stringByEvaluatingJavaScriptFromString:source];
+}
+
+- (void)injectJavaScript:(NSString *)script
+{
+  [_webView stringByEvaluatingJavaScriptFromString:script];
 }
 
 - (void)setSource:(NSDictionary *)source
@@ -115,7 +113,7 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
       if (!baseURL) {
         baseURL = [NSURL URLWithString:@"about:blank"];
       }
-      [_webView.mainFrame loadHTMLString:html baseURL:baseURL];
+      [_webView loadHTMLString:html baseURL:baseURL];
       return;
     }
 
@@ -124,53 +122,61 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
     // passing the redirect urls back here, so we ignore them if trying to load
     // the same url. We'll expose a call to 'reload' to allow a user to load
     // the existing page.
-    if ([request.URL isEqual:_webView.mainFrameURL]) {
+    if ([request.URL isEqual:_webView.request.URL]) {
       return;
     }
     if (!request.URL) {
       // Clear the webview
-      [_webView.mainFrame loadHTMLString:@"" baseURL:nil];
+      [_webView loadHTMLString:@"" baseURL:nil];
       return;
     }
-    [_webView.mainFrame loadRequest:request];
+    [_webView loadRequest:request];
   }
 }
 
-- (void)layout
+- (void)layoutSubviews
 {
-  [super layout];
+  [super layoutSubviews];
   _webView.frame = self.bounds;
 }
 
-- (void)setContentInset:(NSEdgeInsets)contentInset
+- (void)setContentInset:(UIEdgeInsets)contentInset
 {
   _contentInset = contentInset;
-//  [RCTView autoAdjustInsetsForView:self
-//                    withScrollView:_webView.scrollView
-//                      updateOffset:NO];
+  [RCTView autoAdjustInsetsForView:self
+                    withScrollView:_webView.scrollView
+                      updateOffset:NO];
+}
+
+- (void)setScalesPageToFit:(BOOL)scalesPageToFit
+{
+  if (_webView.scalesPageToFit != scalesPageToFit) {
+    _webView.scalesPageToFit = scalesPageToFit;
+    [_webView reload];
+  }
 }
 
 - (BOOL)scalesPageToFit
 {
-  return YES;
+  return _webView.scalesPageToFit;
 }
 
-- (void)setBackgroundColor:(NSColor *)backgroundColor
+- (void)setBackgroundColor:(UIColor *)backgroundColor
 {
   CGFloat alpha = CGColorGetAlpha(backgroundColor.CGColor);
-  [self.layer setOpaque:(alpha == 1.0)];
-  [[_webView layer] setBackgroundColor:[backgroundColor CGColor]];
+  self.opaque = _webView.opaque = (alpha == 1.0);
+  _webView.backgroundColor = backgroundColor;
 }
 
-- (NSColor *)backgroundColor
+- (UIColor *)backgroundColor
 {
-  return _webView.layer.backgroundColor;
+  return _webView.backgroundColor;
 }
 
 - (NSMutableDictionary<NSString *, id> *)baseEvent
 {
   NSMutableDictionary<NSString *, id> *event = [[NSMutableDictionary alloc] initWithDictionary:@{
-    @"url": _webView.mainFrameURL ?: @"",
+    @"url": _webView.request.URL.absoluteString ?: @"",
     @"loading" : @(_webView.loading),
     @"title": [_webView stringByEvaluatingJavaScriptFromString:@"document.title"],
     @"canGoBack": @(_webView.canGoBack),
@@ -182,52 +188,42 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 
 - (void)refreshContentInset
 {
-//  [RCTView autoAdjustInsetsForView:self
-//                    withScrollView:_webView.scrollView
-//                      updateOffset:YES];
+  [RCTView autoAdjustInsetsForView:self
+                    withScrollView:_webView.scrollView
+                      updateOffset:YES];
 }
 
 #pragma mark - UIWebViewDelegate methods
 
-- (void)webView:(WebView *)sender
-willPerformClientRedirectToURL:(NSURL *)URL
-          delay:(NSTimeInterval)seconds
-       fireDate:(NSDate *)date
-       forFrame:(WebFrame *)frame {
-   BOOL isJSNavigation = [URL.scheme isEqualToString:RCTJSNavigationScheme];
-  if (isJSNavigation && [URL.host isEqualToString:RCTJSPostMessageHost]) {
-    NSString *data = URL.query;
-    data = [data stringByReplacingOccurrencesOfString:@"+" withString:@" "];
-    data = [data stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
-
-    NSMutableDictionary<NSString *, id> *event = [self baseEvent];
-    [event addEntriesFromDictionary: @{
-                                       @"data": data,
-                                       }];
-    _onMessage(event);
-  }
-
-}
-- (NSURLRequest *)webView:(WebView *)sender
-                 resource:(id)identifier
-          willSendRequest:(NSURLRequest *)request
-         redirectResponse:(NSURLResponse *)redirectResponse
-           fromDataSource:(WebDataSource *)dataSource
+- (BOOL)webView:(__unused UIWebView *)webView shouldStartLoadWithRequest:(NSURLRequest *)request
+ navigationType:(UIWebViewNavigationType)navigationType
 {
   BOOL isJSNavigation = [request.URL.scheme isEqualToString:RCTJSNavigationScheme];
-  NSString *navigationType = @"Not supported yet";
+
+  static NSDictionary<NSNumber *, NSString *> *navigationTypes;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    navigationTypes = @{
+      @(UIWebViewNavigationTypeLinkClicked): @"click",
+      @(UIWebViewNavigationTypeFormSubmitted): @"formsubmit",
+      @(UIWebViewNavigationTypeBackForward): @"backforward",
+      @(UIWebViewNavigationTypeReload): @"reload",
+      @(UIWebViewNavigationTypeFormResubmitted): @"formresubmit",
+      @(UIWebViewNavigationTypeOther): @"other",
+    };
+  });
 
   // skip this for the JS Navigation handler
   if (!isJSNavigation && _onShouldStartLoadWithRequest) {
     NSMutableDictionary<NSString *, id> *event = [self baseEvent];
     [event addEntriesFromDictionary: @{
-                                       @"url": (request.URL).absoluteString,
-                                       @"navigationType": navigationType
-                                       }];
+      @"url": (request.URL).absoluteString,
+      @"navigationType": navigationTypes[@(navigationType)]
+    }];
     if (![self.delegate webView:self
       shouldStartLoadForRequest:event
                    withCallback:_onShouldStartLoadWithRequest]) {
-      return nil;
+      return NO;
     }
   }
 
@@ -237,9 +233,9 @@ willPerformClientRedirectToURL:(NSURL *)URL
     if (isTopFrame) {
       NSMutableDictionary<NSString *, id> *event = [self baseEvent];
       [event addEntriesFromDictionary: @{
-                                         @"url": (request.URL).absoluteString,
-                                         @"navigationType": navigationType
-                                         }];
+        @"url": (request.URL).absoluteString,
+        @"navigationType": navigationTypes[@(navigationType)]
+      }];
       _onLoadingStart(event);
     }
   }
@@ -248,18 +244,19 @@ willPerformClientRedirectToURL:(NSURL *)URL
     NSString *data = request.URL.query;
     data = [data stringByReplacingOccurrencesOfString:@"+" withString:@" "];
     data = [data stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
-    
+
     NSMutableDictionary<NSString *, id> *event = [self baseEvent];
     [event addEntriesFromDictionary: @{
-                                       @"data": data,
-                                       }];
+      @"data": data,
+    }];
     _onMessage(event);
   }
 
-  return request;
+  // JS Navigation handler
+  return !isJSNavigation;
 }
-- (void)webView:(__unused WebView *)sender didFailLoadWithError:(NSError *)error
-       forFrame:(__unused WebFrame *)frame
+
+- (void)webView:(__unused UIWebView *)webView didFailLoadWithError:(NSError *)error
 {
   if (_onLoadingError) {
     if ([error.domain isEqualToString:NSURLErrorDomain] && error.code == NSURLErrorCancelled) {
@@ -272,46 +269,38 @@ willPerformClientRedirectToURL:(NSURL *)URL
 
     NSMutableDictionary<NSString *, id> *event = [self baseEvent];
     [event addEntriesFromDictionary:@{
-                                      @"domain": error.domain,
-                                      @"code": @(error.code),
-                                      @"description": error.localizedDescription,
-                                      }];
+      @"domain": error.domain,
+      @"code": @(error.code),
+      @"description": error.localizedDescription,
+    }];
     _onLoadingError(event);
   }
 }
 
-- (void)webView:(WebView *)sender
-decidePolicyForNavigationAction:(NSDictionary *)actionInformation
-        request:(NSURLRequest *)request frame:(WebFrame *)frame
-decisionListener:(id<WebPolicyDecisionListener>)listener
-{
-  NSLog(@"log");
-}
-
-- (void)webView:(__unused WebView *)sender didFinishLoadForFrame:(WebFrame *)frame
+- (void)webViewDidFinishLoad:(UIWebView *)webView
 {
   if (_messagingEnabled) {
-#if RCT_DEV
+    #if RCT_DEV
     // See isNative in lodash
     NSString *testPostMessageNative = @"String(window.postMessage) === String(Object.hasOwnProperty).replace('hasOwnProperty', 'postMessage')";
     BOOL postMessageIsNative = [
-                                [_webView stringByEvaluatingJavaScriptFromString:testPostMessageNative]
-                                isEqualToString:@"true"
-                                ];
+      [webView stringByEvaluatingJavaScriptFromString:testPostMessageNative]
+      isEqualToString:@"true"
+    ];
     if (!postMessageIsNative) {
       RCTLogError(@"Setting onMessage on a WebView overrides existing values of window.postMessage, but a previous value was defined");
     }
-#endif
+    #endif
     NSString *source = [NSString stringWithFormat:
-                        @"window.originalPostMessage = window.postMessage;"
-                        "window.postMessage = function(data) {"
-                        "window.location = '%@://%@?' + encodeURIComponent(String(data));"
-                        "};", RCTJSNavigationScheme, RCTJSPostMessageHost
-                        ];
-    [_webView stringByEvaluatingJavaScriptFromString:source];
+      @"window.originalPostMessage = window.postMessage;"
+      "window.postMessage = function(data) {"
+        "window.location = '%@://%@?' + encodeURIComponent(String(data));"
+      "};", RCTJSNavigationScheme, RCTJSPostMessageHost
+    ];
+    [webView stringByEvaluatingJavaScriptFromString:source];
   }
   if (_injectedJavaScript != nil) {
-    NSString *jsEvaluationValue = [frame.webView stringByEvaluatingJavaScriptFromString:_injectedJavaScript];
+    NSString *jsEvaluationValue = [webView stringByEvaluatingJavaScriptFromString:_injectedJavaScript];
 
     NSMutableDictionary<NSString *, id> *event = [self baseEvent];
     event[@"jsEvaluationValue"] = jsEvaluationValue;
@@ -319,8 +308,7 @@ decisionListener:(id<WebPolicyDecisionListener>)listener
     _onLoadingFinish(event);
   }
   // we only need the final 'finishLoad' call so only fire the event when we're actually done loading.
-
-  else if (_onLoadingFinish && ![frame.webView.mainFrameURL isEqualToString:@"about:blank"]) {
+  else if (_onLoadingFinish && !webView.loading && ![webView.request.URL.absoluteString isEqualToString:@"about:blank"]) {
     _onLoadingFinish([self baseEvent]);
   }
 }

@@ -38,7 +38,7 @@
 var fs = require('fs');
 var path = require('path');
 var exec = require('child_process').exec;
-var spawn = require('child_process').spawn;
+var execSync = require('child_process').execSync;
 var chalk = require('chalk');
 var prompt = require('prompt');
 var semver = require('semver');
@@ -48,13 +48,15 @@ var semver = require('semver');
  *   if you are in a RN app folder
  * init - to create a new project and npm install it
  *   --verbose - to print logs while init
+ *   --template - name of the template to use, e.g. --template navigation
  *   --version <alternative react-native package> - override default (https://registry.npmjs.org/react-native@latest),
  *      package to install, examples:
  *     - "0.22.0-rc1" - A new app will be created using a specific version of React Native from npm repo
  *     - "https://registry.npmjs.org/react-native/-/react-native-0.20.0.tgz" - a .tgz archive from any npm repo
  *     - "/Users/home/react-native/react-native-0.22.0.tgz" - for package prepared with `npm pack`, useful for e2e tests
  */
-var argv = require('minimist')(process.argv.slice(2));
+
+var options = require('minimist')(process.argv.slice(2));
 
 var CLI_MODULE_PATH = function() {
   return path.resolve(
@@ -74,7 +76,36 @@ var REACT_NATIVE_PACKAGE_JSON_PATH = function() {
   );
 };
 
-checkForVersionArgument();
+if (options._.length === 0 && (options.v || options.version)) {
+  printVersionsAndExit(REACT_NATIVE_PACKAGE_JSON_PATH());
+}
+
+// Use Yarn if available, it's much faster than the npm client.
+// Return the version of yarn installed on the system, null if yarn is not available.
+function getYarnVersionIfAvailable() {
+  var yarnVersion;
+  try {
+    // execSync returns a Buffer -> convert to string
+    if (process.platform.startsWith('win')) {
+      yarnVersion = (execSync('yarn --version').toString() || '').trim();
+    } else {
+      yarnVersion = (execSync('yarn --version 2>/dev/null').toString() || '').trim();
+    }
+  } catch (error) {
+    return null;
+  }
+  // yarn < 0.16 has a 'missing manifest' bug
+  try {
+    if (semver.gte(yarnVersion, '0.16.0')) {
+      return yarnVersion;
+    } else {
+      return null;
+    }
+  } catch (error) {
+    console.error('Cannot parse yarn version: ' + yarnVersion);
+    return null;
+  }
+}
 
 var cli;
 var cliPath = CLI_MODULE_PATH();
@@ -82,11 +113,30 @@ if (fs.existsSync(cliPath)) {
   cli = require(cliPath);
 }
 
-// minimist api
-var commands = argv._;
+var commands = options._;
 if (cli) {
   cli.run();
 } else {
+  if (options._.length === 0 && (options.h || options.help)) {
+    console.log([
+      '',
+      '  Usage: react-native [command] [options]',
+      '',
+      '',
+      '  Commands:',
+      '',
+      '    init <ProjectName> [options]  generates a new project and installs its dependencies',
+      '',
+      '  Options:',
+      '',
+      '    -h, --help    output usage information',
+      '    -v, --version use a specific version of React Native',
+      '    --template use an app template. Use --template to see available templates.',
+      '',
+    ].join('\n'));
+    process.exit(0);
+  }
+
   if (commands.length === 0) {
     console.error(
       'You did not pass any commands, did you mean to run `react-native-macos init`?'
@@ -102,7 +152,7 @@ if (cli) {
       );
       process.exit(1);
     } else {
-      init(commands[1], argv.verbose, argv.version);
+      init(commands[1], options);
     }
     break;
   default:
@@ -116,8 +166,8 @@ if (cli) {
   }
 }
 
-function validatePackageName(name) {
-  if (!name.match(/^[$A-Z_][0-9A-Z_$]*$/i)) {
+function validateProjectName(name) {
+  if (!String(name).match(/^[$A-Z_][0-9A-Z_$]*$/i)) {
     console.error(
       '"%s" is not a valid name for a project. Please use a valid identifier ' +
         'name (alphanumeric).',
@@ -136,17 +186,24 @@ function validatePackageName(name) {
   }
 }
 
-function init(name, verbose, rnPackage) {
-  validatePackageName(name);
+/**
+ * @param name Project name, e.g. 'AwesomeApp'.
+ * @param options.verbose If true, will run 'npm install' in verbose mode (for debugging).
+ * @param options.version Version of React Native to install, e.g. '0.38.0'.
+ * @param options.npm If true, always use the npm command line client,
+ *                       don't use yarn even if available.
+ */
+function init(name, options) {
+  validateProjectName(name);
 
   if (fs.existsSync(name)) {
-    createAfterConfirmation(name, verbose, rnPackage);
+    createAfterConfirmation(name, options);
   } else {
-    createProject(name, verbose, rnPackage);
+    createProject(name, options);
   }
 }
 
-function createAfterConfirmation(name, verbose, rnPackage) {
+function createAfterConfirmation(name, options) {
   prompt.start();
 
   var property = {
@@ -159,7 +216,7 @@ function createAfterConfirmation(name, verbose, rnPackage) {
 
   prompt.get(property, function (err, result) {
     if (result.yesno[0] === 'y') {
-      createProject(name, verbose, rnPackage);
+      createProject(name, options);
     } else {
       console.log('Project initialization canceled');
       process.exit();
@@ -167,7 +224,7 @@ function createAfterConfirmation(name, verbose, rnPackage) {
   });
 }
 
-function createProject(name, verbose, rnPackage) {
+function createProject(name, options) {
   var root = path.resolve(name);
   var projectName = path.basename(root);
 
@@ -221,12 +278,17 @@ function run(root, projectName, rnPackage) {
       console.error('`npm install --save --save-exact react-native-macos` failed');
       process.exit(1);
     }
-
-    checkNodeVersion();
-
-    var cli = require(CLI_MODULE_PATH());
-    cli.init(root, projectName);
-  });
+  }
+  try {
+    execSync(installCommand, {stdio: 'inherit'});
+  } catch (err) {
+    console.error(err);
+    console.error('Command `' + installCommand + '` failed.');
+    process.exit(1);
+  }
+  checkNodeVersion();
+  cli = require(CLI_MODULE_PATH());
+  cli.init(root, projectName);
 }
 
 function runVerbose(root, projectName, rnPackage) {
@@ -269,4 +331,5 @@ function checkForVersionArgument() {
     }
     process.exit();
   }
+  process.exit();
 }

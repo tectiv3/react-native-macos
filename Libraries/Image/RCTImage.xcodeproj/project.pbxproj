@@ -49,26 +49,28 @@
 		143879371AAD32A300F088A5 /* RCTImageLoader.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RCTImageLoader.m; sourceTree = "<group>"; };
 		35123E691B59C99D00EBAD80 /* RCTImageStoreManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTImageStoreManager.h; sourceTree = "<group>"; };
 		35123E6A1B59C99D00EBAD80 /* RCTImageStoreManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RCTImageStoreManager.m; sourceTree = "<group>"; };
-		354631661B69857700AA0B86 /* RCTImageEditingManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTImageEditingManager.h; sourceTree = "<group>"; };
+		354631661B69857700AA0B86 /* RCTImageEditingManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; lineEnding = 0; path = RCTImageEditingManager.h; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.objcpp; };
 		354631671B69857700AA0B86 /* RCTImageEditingManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RCTImageEditingManager.m; sourceTree = "<group>"; };
+		3D5FA63C1DE4B44A0058FD77 /* RCTImageLoader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTImageLoader.h; sourceTree = "<group>"; };
+		3D5FA63D1DE4B44A0058FD77 /* RCTImageStoreManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTImageStoreManager.h; sourceTree = "<group>"; };
+		3D5FA63E1DE4B44A0058FD77 /* RCTResizeMode.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTResizeMode.h; sourceTree = "<group>"; };
+		3D5FA68C1DE4BA290058FD77 /* libRCTNetwork.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libRCTNetwork.a; path = "../Network/build/Debug-iphoneos/libRCTNetwork.a"; sourceTree = "<group>"; };
 		58B5115D1A9E6B3D00147676 /* libRCTImage.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libRCTImage.a; sourceTree = BUILT_PRODUCTS_DIR; };
-		CCD34C251D4B8FE900268922 /* RCTImageCache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTImageCache.h; sourceTree = "<group>"; };
+		CCD34C251D4B8FE900268922 /* RCTImageCache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; lineEnding = 0; path = RCTImageCache.h; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.objcpp; };
 		CCD34C261D4B8FE900268922 /* RCTImageCache.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RCTImageCache.m; sourceTree = "<group>"; };
-		EEF314701C9B0DD30049118E /* RCTImageBlurUtils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RCTImageBlurUtils.h; sourceTree = "<group>"; };
+		EEF314701C9B0DD30049118E /* RCTImageBlurUtils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; lineEnding = 0; path = RCTImageBlurUtils.h; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.objcpp; };
 		EEF314711C9B0DD30049118E /* RCTImageBlurUtils.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RCTImageBlurUtils.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFrameworksBuildPhase section */
-		58B5115A1A9E6B3D00147676 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
-
 /* Begin PBXGroup section */
+		3D5FA68B1DE4BA290058FD77 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				3D5FA68C1DE4BA290058FD77 /* libRCTNetwork.a */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		58B511541A9E6B3D00147676 = {
 			isa = PBXGroup;
 			children = (

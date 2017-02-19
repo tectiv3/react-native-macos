@@ -9,79 +9,16 @@
 
 #import "RCTText.h"
 
+#import <MobileCoreServices/UTCoreTypes.h>
+
+#import <React/RCTUtils.h>
+#import <React/UIView+React.h>
+
 #import "RCTShadowText.h"
-#import "RCTUtils.h"
-#import "NSView+React.h"
-#import <QuartzCore/CAShapeLayer.h>
-
-// https://github.com/BigZaphod/Chameleon/blob/84605ede274bd82b330d72dd6ac41e64eb925fd7/UIKit/Classes/UIGeometry.h
-CGRect UIEdgeInsetsInsetRect(CGRect rect, NSEdgeInsets insets) {
-  rect.origin.x    += insets.left;
-  rect.origin.y    += insets.top;
-  rect.size.width  -= (insets.left + insets.right);
-  rect.size.height -= (insets.top  + insets.bottom);
-  return rect;
-}
-
-@implementation NSBezierPath (BezierPathQuartzUtilities)
-// This method works only in OS X v10.2 and later.
-- (CGPathRef)quartzPath
-{
-  long i, numElements;
-
-  // Need to begin a path here.
-  CGPathRef           immutablePath = NULL;
-
-  // Then draw the path elements.
-  numElements = [self elementCount];
-  if (numElements > 0)
-  {
-    CGMutablePathRef    path = CGPathCreateMutable();
-    NSPoint             points[3];
-    BOOL                didClosePath = YES;
-
-    for (i = 0; i < numElements; i++)
-    {
-      switch ([self elementAtIndex:i associatedPoints:points])
-      {
-        case NSMoveToBezierPathElement:
-          CGPathMoveToPoint(path, NULL, points[0].x, points[0].y);
-          break;
-
-        case NSLineToBezierPathElement:
-          CGPathAddLineToPoint(path, NULL, points[0].x, points[0].y);
-          didClosePath = NO;
-          break;
-
-        case NSCurveToBezierPathElement:
-          CGPathAddCurveToPoint(path, NULL, points[0].x, points[0].y,
-                                points[1].x, points[1].y,
-                                points[2].x, points[2].y);
-          didClosePath = NO;
-          break;
-
-        case NSClosePathBezierPathElement:
-          CGPathCloseSubpath(path);
-          didClosePath = YES;
-          break;
-      }
-    }
-
-    // Be sure the path is closed or Quartz may not do valid hit detection.
-    if (!didClosePath)
-      CGPathCloseSubpath(path);
-
-    immutablePath = CGPathCreateCopy(path);
-    CGPathRelease(path);
-  }
-
-  return immutablePath; // TODO: potential leak
-}
-@end
 
 static void collectNonTextDescendants(RCTText *view, NSMutableArray *nonTextDescendants)
 {
-  for (NSView *child in view.reactSubviews) {
+  for (UIView *child in view.reactSubviews) {
     if ([child isKindOfClass:[RCTText class]]) {
       collectNonTextDescendants((RCTText *)child, nonTextDescendants);
     } else if (!CGRectEqualToRect(child.frame, CGRectZero)) {
@@ -94,20 +31,20 @@ static void collectNonTextDescendants(RCTText *view, NSMutableArray *nonTextDesc
 {
   NSTextStorage *_textStorage;
   CAShapeLayer *_highlightLayer;
+  UILongPressGestureRecognizer *_longPressGestureRecognizer;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
 {
   if ((self = [super initWithFrame:frame])) {
     _textStorage = [NSTextStorage new];
-    _respondsToLiveResizing = YES;
+    self.isAccessibilityElement = YES;
+    self.accessibilityTraits |= UIAccessibilityTraitStaticText;
+
+    self.opaque = NO;
+    self.contentMode = UIViewContentModeRedraw;
   }
   return self;
-}
-
-- (BOOL)isFlipped
-{
-  return YES;
 }
 
 - (NSString *)description
@@ -118,21 +55,34 @@ static void collectNonTextDescendants(RCTText *view, NSMutableArray *nonTextDesc
   return [superDescription stringByReplacingCharactersInRange:semicolonRange withString:replacement];
 }
 
-- (void)reactSetFrame:(CGRect)frame
+- (void)setSelectable:(BOOL)selectable
 {
-  if (self.inLiveResize && !self.respondsToLiveResizing) {
+  if (_selectable == selectable) {
     return;
   }
-  [super reactSetFrame:frame];
+
+  _selectable = selectable;
+
+  if (_selectable) {
+    [self enableContextMenu];
+  }
+  else {
+    [self disableContextMenu];
+  }
 }
 
-- (void)reactSetInheritedBackgroundColor:(NSColor *)inheritedBackgroundColor
+- (void)reactSetFrame:(CGRect)frame
 {
-  if (self.wantsLayer == NO) {
-    self.wantsLayer = YES;
-    self.layer = [[CALayer alloc] init];
-  }
-  self.layer.backgroundColor = [inheritedBackgroundColor CGColor];
+  // Text looks super weird if its frame is animated.
+  // This disables the frame animation, without affecting opacity, etc.
+  [UIView performWithoutAnimation:^{
+    [super reactSetFrame:frame];
+  }];
+}
+
+- (void)reactSetInheritedBackgroundColor:(UIColor *)inheritedBackgroundColor
+{
+  self.backgroundColor = inheritedBackgroundColor;
 }
 
 - (void)didUpdateReactSubviews
@@ -150,42 +100,41 @@ static void collectNonTextDescendants(RCTText *view, NSMutableArray *nonTextDesc
     collectNonTextDescendants(self, nonTextDescendants);
     NSArray *subviews = self.subviews;
     if (![subviews isEqualToArray:nonTextDescendants]) {
-      for (NSView *child in subviews) {
+      for (UIView *child in subviews) {
         if (![nonTextDescendants containsObject:child]) {
           [child removeFromSuperview];
         }
       }
-      for (NSView *child in nonTextDescendants) {
+      for (UIView *child in nonTextDescendants) {
         [self addSubview:child];
       }
     }
 
-    [self setNeedsDisplay:YES];
+    [self setNeedsDisplay];
   }
 }
 
-- (void)drawRect:(CGRect)dirtyRect
+- (void)drawRect:(CGRect)rect
 {
-  NSLayoutManager *layoutManager = _textStorage.layoutManagers.firstObject;
-  NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
-  CGRect textFrame = UIEdgeInsetsInsetRect(self.bounds, _contentInset);
-  NSRange glyphRange = [layoutManager glyphRangeForTextContainer:textContainer];
+  NSLayoutManager *layoutManager = [_textStorage.layoutManagers firstObject];
+  NSTextContainer *textContainer = [layoutManager.textContainers firstObject];
 
+  NSRange glyphRange = [layoutManager glyphRangeForTextContainer:textContainer];
+  CGRect textFrame = self.textFrame;
   [layoutManager drawBackgroundForGlyphRange:glyphRange atPoint:textFrame.origin];
   [layoutManager drawGlyphsForGlyphRange:glyphRange atPoint:textFrame.origin];
 
-  __block NSBezierPath *highlightPath = nil;
+  __block UIBezierPath *highlightPath = nil;
   NSRange characterRange = [layoutManager characterRangeForGlyphRange:glyphRange actualGlyphRange:NULL];
-
   [layoutManager.textStorage enumerateAttribute:RCTIsHighlightedAttributeName inRange:characterRange options:0 usingBlock:^(NSNumber *value, NSRange range, BOOL *_) {
     if (!value.boolValue) {
       return;
     }
 
     [layoutManager enumerateEnclosingRectsForGlyphRange:range withinSelectedGlyphRange:range inTextContainer:textContainer usingBlock:^(CGRect enclosingRect, __unused BOOL *__) {
-      NSBezierPath *path = [NSBezierPath bezierPathWithRoundedRect:CGRectInset(enclosingRect, -2, -2) xRadius:2 yRadius:2];
+      UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(enclosingRect, -2, -2) cornerRadius:2];
       if (highlightPath) {
-        [highlightPath appendBezierPath:path];
+        [highlightPath appendPath:path];
       } else {
         highlightPath = path;
       }
@@ -195,11 +144,11 @@ static void collectNonTextDescendants(RCTText *view, NSMutableArray *nonTextDesc
   if (highlightPath) {
     if (!_highlightLayer) {
       _highlightLayer = [CAShapeLayer layer];
-      _highlightLayer.fillColor = [NSColor colorWithWhite:0 alpha:0.25].CGColor;
+      _highlightLayer.fillColor = [UIColor colorWithWhite:0 alpha:0.25].CGColor;
       [self.layer addSublayer:_highlightLayer];
     }
     _highlightLayer.position = (CGPoint){_contentInset.left, _contentInset.top};
-    _highlightLayer.path = highlightPath.quartzPath;
+    _highlightLayer.path = highlightPath.CGPath;
   } else {
     [_highlightLayer removeFromSuperlayer];
     _highlightLayer = nil;
@@ -225,9 +174,9 @@ static void collectNonTextDescendants(RCTText *view, NSMutableArray *nonTextDesc
   return reactTag;
 }
 
-- (void)viewDidMoveToWindow
+- (void)didMoveToWindow
 {
-  [super viewDidMoveToWindow];
+  [super didMoveToWindow];
 
   if (!self.window) {
     self.layer.contents = nil;
@@ -236,15 +185,84 @@ static void collectNonTextDescendants(RCTText *view, NSMutableArray *nonTextDesc
       _highlightLayer = nil;
     }
   } else if (_textStorage.length) {
-    [self setNeedsDisplay:YES];
+    [self setNeedsDisplay];
   }
 }
+
 
 #pragma mark - Accessibility
 
 - (NSString *)accessibilityLabel
 {
   return _textStorage.string;
+}
+
+#pragma mark - Context Menu
+
+- (void)enableContextMenu
+{
+  _longPressGestureRecognizer = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
+  [self addGestureRecognizer:_longPressGestureRecognizer];
+}
+
+- (void)disableContextMenu
+{
+  [self removeGestureRecognizer:_longPressGestureRecognizer];
+  _longPressGestureRecognizer = nil;
+}
+
+- (void)handleLongPress:(UILongPressGestureRecognizer *)gesture
+{
+#if !TARGET_OS_TV
+  UIMenuController *menuController = [UIMenuController sharedMenuController];
+
+  if (menuController.isMenuVisible) {
+    return;
+  }
+
+  if (!self.isFirstResponder) {
+    [self becomeFirstResponder];
+  }
+
+  [menuController setTargetRect:self.bounds inView:self];
+  [menuController setMenuVisible:YES animated:YES];
+#endif
+}
+
+- (BOOL)canBecomeFirstResponder
+{
+  return _selectable;
+}
+
+- (BOOL)canPerformAction:(SEL)action withSender:(id)sender
+{
+  if (action == @selector(copy:)) {
+    return YES;
+  }
+
+  return [super canPerformAction:action withSender:sender];
+}
+
+- (void)copy:(id)sender
+{
+#if !TARGET_OS_TV
+  NSAttributedString *attributedString = _textStorage;
+
+  NSMutableDictionary *item = [NSMutableDictionary new];
+
+  NSData *rtf = [attributedString dataFromRange:NSMakeRange(0, attributedString.length)
+                             documentAttributes:@{NSDocumentTypeDocumentAttribute: NSRTFDTextDocumentType}
+                                          error:nil];
+
+  if (rtf) {
+    [item setObject:rtf forKey:(id)kUTTypeFlatRTFD];
+  }
+
+  [item setObject:attributedString.string forKey:(id)kUTTypeUTF8PlainText];
+
+  UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
+  pasteboard.items = @[item];
+#endif
 }
 
 @end

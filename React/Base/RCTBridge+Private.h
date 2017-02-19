@@ -7,10 +7,20 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import "RCTBridge.h"
+#import <JavaScriptCore/JSBase.h>
+
+#import <React/RCTBridge.h>
 
 @class RCTModuleData;
 @protocol RCTJavaScriptExecutor;
+
+RCT_EXTERN NSArray<Class> *RCTGetModuleClasses(void);
+
+RCT_EXTERN __attribute__((weak)) void RCTFBQuickPerformanceLoggerConfigureHooks(JSGlobalContextRef ctx);
+
+#if RCT_DEBUG
+RCT_EXTERN void RCTVerifyAllModulesExported(NSArray *extraModules);
+#endif
 
 @interface RCTBridge ()
 
@@ -75,6 +85,11 @@
 @property (nonatomic, assign, readonly) BOOL moduleSetupComplete;
 
 /**
+ * Called on the child bridge to run the executor and start loading.
+ */
+- (void)start;
+
+/**
  * Used by RCTModuleData to register the module for frame updates after it is
  * lazily initialized.
  */
@@ -100,15 +115,17 @@
 - (void)stopProfiling:(void (^)(NSData *))callback;
 
 /**
- * Executes native calls sent by JavaScript. Exposed for testing purposes only
- */
-- (void)handleBuffer:(NSArray<NSArray *> *)buffer;
-
-/**
  * Exposed for the RCTJSCExecutor for sending native methods called from
  * JavaScript in the middle of a batch.
  */
 - (void)handleBuffer:(NSArray<NSArray *> *)buffer batchEnded:(BOOL)hasEnded;
+
+/**
+ * Synchronously call a specific native module's method and return the result
+ */
+- (id)callNativeModule:(NSUInteger)moduleID
+                method:(NSUInteger)methodID
+                params:(NSArray *)params;
 
 /**
  * Exposed for the RCTJSCExecutor for lazily loading native modules
@@ -134,5 +151,6 @@
 @property (nonatomic, assign, readonly) BOOL moduleSetupComplete;
 
 - (instancetype)initWithParentBridge:(RCTBridge *)bridge NS_DESIGNATED_INITIALIZER;
+- (void)start;
 
 @end

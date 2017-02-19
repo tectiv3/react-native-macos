@@ -9,30 +9,24 @@
 
 #import "ARTSurfaceView.h"
 
+#import <React/RCTLog.h>
+
 #import "ARTNode.h"
-#import "RCTLog.h"
-#import "UIImageUtils.h"
 
 @implementation ARTSurfaceView
 
-- (BOOL)isFlipped
+- (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex
 {
-  return YES;
+  [super insertReactSubview:subview atIndex:atIndex];
+  [self insertSubview:subview atIndex:atIndex];
+  [self invalidate];
 }
 
-- (void)insertReactSubview:(NSView *)subview atIndex:(NSInteger)atIndex
+- (void)removeReactSubview:(UIView *)subview
 {
-    [super insertReactSubview:subview atIndex:atIndex];
-    [self addSubview:subview];
-    [self invalidate];
+  [super removeReactSubview:subview];
+  [self invalidate];
 }
-
-- (void)removeReactSubview:(NSView *)subview
-{
-    [super removeReactSubview:subview];
-    [self invalidate];
-}
-
 
 - (void)didUpdateReactSubviews
 {
@@ -41,7 +35,7 @@
 
 - (void)invalidate
 {
-  [self setNeedsDisplay:YES];
+  [self setNeedsDisplay];
 }
 
 - (void)drawRect:(CGRect)rect
@@ -52,10 +46,9 @@
   }
 }
 
-- (void)reactSetInheritedBackgroundColor:(NSColor *)inheritedBackgroundColor
+- (void)reactSetInheritedBackgroundColor:(UIColor *)inheritedBackgroundColor
 {
-  [self setWantsLayer:YES];
-  self.layer.backgroundColor = [inheritedBackgroundColor CGColor];
+  self.backgroundColor = inheritedBackgroundColor;
 }
 
 @end

@@ -67,7 +67,11 @@ static NSString *RCTGetStorageDirectory()
   static NSString *storageDirectory = nil;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
-    storageDirectory = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
+#if TARGET_OS_TV
+    storageDirectory = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
+#else
+    storageDirectory = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+#endif
     storageDirectory = [storageDirectory stringByAppendingPathComponent:RCTStorageDirectory];
   });
   return storageDirectory;
@@ -132,10 +136,9 @@ static NSCache *RCTGetCache()
     cache.totalCostLimit = 2 * 1024 * 1024; // 2MB
 
     // Clear cache in the event of a memory warning
-    // TODO: Add replacement for memory warnings
-//    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidReceiveMemoryWarningNotification object:nil queue:nil usingBlock:^(__unused NSNotification *note) {
-//      [cache removeAllObjects];
-//    }];
+    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidReceiveMemoryWarningNotification object:nil queue:nil usingBlock:^(__unused NSNotification *note) {
+      [cache removeAllObjects];
+    }];
   });
   return cache;
 }
@@ -214,6 +217,10 @@ RCT_EXPORT_MODULE()
 - (NSDictionary *)_ensureSetup
 {
   RCTAssertThread(RCTGetMethodQueue(), @"Must be executed on storage thread");
+
+#if TARGET_OS_TV
+  RCTLogWarn(@"Persistent storage is not supported on tvOS, your data may be removed at any point.");
+#endif
 
   NSError *error = nil;
   if (!RCTHasCreatedStorageDirectory) {

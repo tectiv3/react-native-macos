@@ -7,25 +7,25 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import <AppKit/AppKit.h>
+#import <UIKit/UIKit.h>
 
-#import "RCTView.h"
-#import "NSView+React.h"
+#import <React/RCTView.h>
+#import <React/UIView+React.h>
 
 @class RCTEventDispatcher;
 
-@interface RCTTextView : RCTView <NSTextViewDelegate, NSTextDelegate>
+@interface RCTTextView : RCTView <UITextViewDelegate>
 
-@property (nonatomic, assign) BOOL autoCorrect;
+@property (nonatomic, assign) UITextAutocorrectionType autocorrectionType;
+@property (nonatomic, assign) UITextSpellCheckingType spellCheckingType;
 @property (nonatomic, assign) BOOL blurOnSubmit;
 @property (nonatomic, assign) BOOL clearTextOnFocus;
 @property (nonatomic, assign) BOOL selectTextOnFocus;
-@property (nonatomic, assign) NSEdgeInsets contentInset;
+@property (nonatomic, assign) UIEdgeInsets contentInset;
 @property (nonatomic, assign) BOOL automaticallyAdjustContentInsets;
 @property (nonatomic, copy) NSString *text;
-@property (nonatomic, strong) NSColor *textColor;
-@property (nonatomic, strong) NSColor *placeholderTextColor;
-@property (nonatomic, strong) NSFont *font;
+@property (nonatomic, strong) UIColor *placeholderTextColor;
+@property (nonatomic, strong) UIFont *font;
 @property (nonatomic, assign) NSInteger mostRecentEventCount;
 @property (nonatomic, strong) NSNumber *maxLength;
 
@@ -33,6 +33,7 @@
 @property (nonatomic, copy) RCTDirectEventBlock onContentSizeChange;
 @property (nonatomic, copy) RCTDirectEventBlock onSelectionChange;
 @property (nonatomic, copy) RCTDirectEventBlock onTextInput;
+@property (nonatomic, copy) RCTDirectEventBlock onScroll;
 
 - (instancetype)initWithEventDispatcher:(RCTEventDispatcher *)eventDispatcher NS_DESIGNATED_INITIALIZER;
 

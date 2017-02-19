@@ -9,16 +9,16 @@
 
 #import "RCTImageStoreManager.h"
 
-#import <ImageIO/ImageIO.h>
 #import <libkern/OSAtomic.h>
-//#import <MobileCoreServices/UTType.h>
 
-#import "RCTAssert.h"
+#import <ImageIO/ImageIO.h>
+#import <MobileCoreServices/UTType.h>
+
+#import <React/RCTAssert.h>
+#import <React/RCTLog.h>
+#import <React/RCTUtils.h>
+
 #import "RCTImageUtils.h"
-#import "RCTLog.h"
-#import "RCTUtils.h"
-
-#import "UIImageUtils.h"
 
 static NSString *const RCTImageStoreURLScheme = @"rct-image-store";
 
@@ -72,11 +72,11 @@ RCT_EXPORT_MODULE()
   });
 }
 
-- (void)storeImage:(NSImage *)image withBlock:(void (^)(NSString *imageTag))block
+- (void)storeImage:(UIImage *)image withBlock:(void (^)(NSString *imageTag))block
 {
   RCTAssertParam(block);
   dispatch_async(_methodQueue, ^{
-    NSString *imageTag = [self _storeImageData:RCTGetImageData(RCTGetCGImage(image), 0.75)];
+    NSString *imageTag = [self _storeImageData:RCTGetImageData(image.CGImage, 0.75)];
     dispatch_async(dispatch_get_main_queue(), ^{
       block(imageTag);
     });
@@ -191,18 +191,18 @@ RCT_EXPORT_METHOD(addImageFromBase64:(NSString *)base64String
 
 @implementation RCTImageStoreManager (Deprecated)
 
-- (NSString *)storeImage:(NSImage *)image
+- (NSString *)storeImage:(UIImage *)image
 {
   RCTAssertMainQueue();
   RCTLogWarn(@"RCTImageStoreManager.storeImage() is deprecated and has poor performance. Use an alternative method instead.");
   __block NSString *imageTag;
   dispatch_sync(_methodQueue, ^{
-    imageTag = [self _storeImageData:RCTGetImageData(RCTGetCGImage(image), 0.75)];
+    imageTag = [self _storeImageData:RCTGetImageData(image.CGImage, 0.75)];
   });
   return imageTag;
 }
 
-- (NSImage *)imageForTag:(NSString *)imageTag
+- (UIImage *)imageForTag:(NSString *)imageTag
 {
   RCTAssertMainQueue();
   RCTLogWarn(@"RCTImageStoreManager.imageForTag() is deprecated and has poor performance. Use an alternative method instead.");
@@ -210,17 +210,17 @@ RCT_EXPORT_METHOD(addImageFromBase64:(NSString *)base64String
   dispatch_sync(_methodQueue, ^{
     imageData = self->_store[imageTag];
   });
-  return [[NSImage alloc] initWithData:imageData];
+  return [UIImage imageWithData:imageData];
 }
 
-- (void)getImageForTag:(NSString *)imageTag withBlock:(void (^)(NSImage *image))block
+- (void)getImageForTag:(NSString *)imageTag withBlock:(void (^)(UIImage *image))block
 {
   RCTAssertParam(block);
   dispatch_async(_methodQueue, ^{
     NSData *imageData = self->_store[imageTag];
     dispatch_async(dispatch_get_main_queue(), ^{
       // imageWithData: is not thread-safe, so we can't do this on methodQueue
-      block([[NSImage alloc] initWithData:imageData]);
+      block([UIImage imageWithData:imageData]);
     });
   });
 }

@@ -13,10 +13,12 @@
 
 @implementation RCTConvert (RCTProgressViewManager)
 
-//RCT_ENUM_CONVERTER(UIProgressViewStyle, (@{
-//  @"default": @(UIProgressViewStyleDefault),
-//  @"bar": @(UIProgressViewStyleBar),
-//}), UIProgressViewStyleDefault, integerValue)
+RCT_ENUM_CONVERTER(UIProgressViewStyle, (@{
+  @"default": @(UIProgressViewStyleDefault),
+#if !TARGET_OS_TV
+  @"bar": @(UIProgressViewStyleBar),
+#endif
+}), UIProgressViewStyleDefault, integerValue)
 
 @end
 
@@ -24,37 +26,16 @@
 
 RCT_EXPORT_MODULE()
 
-- (NSView *)view
+- (UIView *)view
 {
-  NSProgressIndicator *indicator = [NSProgressIndicator new];
-  [indicator setMinValue:0.0];
-  [indicator setMaxValue:1.0];
-  [indicator startAnimation:nil];
-  [indicator setIndeterminate:NO];
-  return indicator;
-
+  return [UIProgressView new];
 }
 
-//RCT_EXPORT_VIEW_PROPERTY(progressTintColor, NSColor)
-//RCT_EXPORT_VIEW_PROPERTY(trackTintColor, NSColor)
-//RCT_EXPORT_VIEW_PROPERTY(progressImage, NSImage)
-//RCT_EXPORT_VIEW_PROPERTY(trackImage, NSImage)
-RCT_CUSTOM_VIEW_PROPERTY(progress, BOOL, NSProgressIndicator)
-{
-  if (json) {
-    double progress = [json doubleValue];//NSNumber[RCTConvert double:json];
-    view.doubleValue = progress;
-  } else {
-    view.doubleValue = defaultView.doubleValue;
-  }
-}
-
-- (NSDictionary<NSString *, id> *)constantsToExport
-{
-  NSProgressIndicator *view = [NSProgressIndicator new];
-  return @{
-    @"ComponentHeight": @(view.intrinsicContentSize.height),
-  };
-}
+RCT_EXPORT_VIEW_PROPERTY(progressViewStyle, UIProgressViewStyle)
+RCT_EXPORT_VIEW_PROPERTY(progress, float)
+RCT_EXPORT_VIEW_PROPERTY(progressTintColor, UIColor)
+RCT_EXPORT_VIEW_PROPERTY(trackTintColor, UIColor)
+RCT_EXPORT_VIEW_PROPERTY(progressImage, UIImage)
+RCT_EXPORT_VIEW_PROPERTY(trackImage, UIImage)
 
 @end

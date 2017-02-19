@@ -7,13 +7,13 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import <AppKit/AppKit.h>
+#import <UIKit/UIKit.h>
 
-#import "RCTComponent.h"
-#import "RCTImageSource.h"
+#import <React/RCTComponent.h>
 
-@interface RCTButton : NSButton
+@interface RCTRefreshControl : UIRefreshControl
 
-@property (nonatomic, copy) RCTBubblingEventBlock onClick;
+@property (nonatomic, copy) NSString *title;
+@property (nonatomic, copy) RCTDirectEventBlock onRefresh;
 
 @end

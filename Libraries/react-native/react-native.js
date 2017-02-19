@@ -31,6 +31,7 @@ const ReactNative = {
   get ART() { return require('ReactNativeART'); },
   get Button() { return require('Button'); },
   get DatePickerIOS() { return require('DatePickerIOS'); },
+  get DrawerLayoutAndroid() { return require('DrawerLayoutAndroid'); },
   get Image() { return require('Image'); },
   get ImageEditor() { return require('ImageEditor'); },
   get ImageStore() { return require('ImageStore'); },
@@ -38,27 +39,32 @@ const ReactNative = {
   get ListView() { return require('ListView'); },
   get MapView() { return require('MapView'); },
   get Modal() { return require('Modal'); },
-
+  get Navigator() { return require('Navigator'); },
+  get NavigatorIOS() { return require('NavigatorIOS'); },
+  get Picker() { return require('Picker'); },
   get PickerIOS() { return require('PickerIOS'); },
-
+  get ProgressBarAndroid() { return require('ProgressBarAndroid'); },
   get ProgressViewIOS() { return require('ProgressViewIOS'); },
   get ScrollView() { return require('ScrollView'); },
   get SegmentedControlIOS() { return require('SegmentedControlIOS'); },
   get Slider() { return require('Slider'); },
-  get SliderIOS() { return require('SliderIOS'); },
   get SnapshotViewIOS() { return require('SnapshotViewIOS'); },
   get Switch() { return require('Switch'); },
-  get RecyclerViewBackedScrollView() { return require('RecyclerViewBackedScrollView'); },
   get RefreshControl() { return require('RefreshControl'); },
-
+  get StatusBar() { return require('StatusBar'); },
+  get SwipeableListView() { return require('SwipeableListView'); },
+  get TabBarIOS() { return require('TabBarIOS'); },
   get Text() { return require('Text'); },
   get TextInput() { return require('TextInput'); },
+  get ToastAndroid() { return require('ToastAndroid'); },
+  get ToolbarAndroid() { return require('ToolbarAndroid'); },
   get Touchable() { return require('Touchable'); },
   get TouchableHighlight() { return require('TouchableHighlight'); },
   get TouchableNativeFeedback() { return require('TouchableNativeFeedback'); },
   get TouchableOpacity() { return require('TouchableOpacity'); },
   get TouchableWithoutFeedback() { return require('TouchableWithoutFeedback'); },
   get View() { return require('View'); },
+  get ViewPagerAndroid() { return require('ViewPagerAndroid'); },
   get WebView() { return require('WebView'); },
 
   // APIs
@@ -69,27 +75,24 @@ const ReactNative = {
   get Animated() { return require('Animated'); },
   get AppRegistry() { return require('AppRegistry'); },
   get AppState() { return require('AppState'); },
-  get AppStateIOS() { return require('AppStateIOS'); },
   get AsyncStorage() { return require('AsyncStorage'); },
   get BackAndroid() { return require('BackAndroid'); },
   get CameraRoll() { return require('CameraRoll'); },
   get Clipboard() { return require('Clipboard'); },
-  get Cursor() { return require('Cursor'); },
+  get DatePickerAndroid() { return require('DatePickerAndroid'); },
   get Dimensions() { return require('Dimensions'); },
   get Easing() { return require('Easing'); },
+  get I18nManager() { return require('I18nManager'); },
   get ImagePickerIOS() { return require('ImagePickerIOS'); },
-  get IntentAndroid() { return require('IntentAndroid'); },
   get InteractionManager() { return require('InteractionManager'); },
   get Keyboard() { return require('Keyboard'); },
   get LayoutAnimation() { return require('LayoutAnimation'); },
   get Linking() { return require('Linking'); },
-  get LinkingIOS() { return require('LinkingIOS'); },
   get NativeEventEmitter() { return require('NativeEventEmitter'); },
   get NavigationExperimental() { return require('NavigationExperimental'); },
-
   get NetInfo() { return require('NetInfo'); },
-  get MenuManager() { return require('MenuManager'); },
   get PanResponder() { return require('PanResponder'); },
+  get PermissionsAndroid() { return require('PermissionsAndroid'); },
   get PixelRatio() { return require('PixelRatio'); },
   get PushNotificationIOS() { return require('PushNotificationIOS'); },
   get Settings() { return require('Settings'); },
@@ -99,6 +102,8 @@ const ReactNative = {
   get Systrace() { return require('Systrace'); },
   get TimePickerAndroid() { return require('TimePickerAndroid'); },
   get UIManager() { return require('UIManager'); },
+  get Vibration() { return require('Vibration'); },
+  get VibrationIOS() { return require('VibrationIOS'); },
 
   // Plugins
   get DeviceEventEmitter() { return require('RCTDeviceEventEmitter'); },
@@ -115,13 +120,6 @@ const ReactNative = {
 
   // See http://facebook.github.io/react/docs/addons.html
   addons: {
-    get LinkedStateMixin() {
-      if (__DEV__) {
-        addonWarn('LinkedStateMixin', 'react-addons-linked-state-mixin');
-      }
-      return require('react/lib/LinkedStateMixin');
-    },
-    Perf: undefined,
     get PureRenderMixin() {
       if (__DEV__) {
         addonWarn('PureRenderMixin', 'react-addons-pure-render-mixin');
@@ -139,7 +137,6 @@ const ReactNative = {
       }
       return require('NativeModules').TestModule;
     },
-    TestUtils: undefined,
     get batchedUpdates() {
       if (__DEV__) {
         warning(
@@ -149,7 +146,7 @@ const ReactNative = {
         );
         warningDedupe.batchedUpdates = true;
       }
-      return require('react/lib/ReactUpdates').batchedUpdates;
+      return require('ReactUpdates').batchedUpdates;
     },
     get createFragment() {
       if (__DEV__) {
@@ -175,14 +172,14 @@ if (__DEV__) {
     Object.defineProperty(ReactNative, key, {
       get() { throwOnWrongReactAPI(key); },
       enumerable: false,
-      configurable: false
+      configurable: false,
     });
   }
 }
 
 // Preserve getters with warnings on the internal ReactNative copy without
 // invoking them.
-const ReactNativeInternal = require('react/lib/ReactNative');
+const ReactNativeInternal = require('ReactNative');
 function applyForwarding(key) {
   if (__DEV__) {
     Object.defineProperty(
@@ -197,26 +194,4 @@ function applyForwarding(key) {
 for (const key in ReactNativeInternal) {
   applyForwarding(key);
 }
-
-if (__DEV__) {
-  Object.defineProperty(ReactNative.addons, 'Perf', {
-    enumerable: true,
-    get: () => {
-      if (__DEV__) {
-        addonWarn('Perf', 'react-addons-perf');
-      }
-      return require('react/lib/ReactPerf');
-    }
-  });
-  Object.defineProperty(ReactNative.addons, 'TestUtils', {
-    enumerable: true,
-    get: () => {
-      if (__DEV__) {
-        addonWarn('update', 'react-addons-test-utils');
-      }
-      return require('react/lib/ReactTestUtils');
-    }
-  });
-}
-
 module.exports = ReactNative;

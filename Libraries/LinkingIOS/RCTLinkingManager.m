@@ -9,30 +9,18 @@
 
 #import "RCTLinkingManager.h"
 
-#import "RCTBridge.h"
-#import "RCTEventDispatcher.h"
-#import "RCTUtils.h"
+#import <React/RCTBridge.h>
+#import <React/RCTEventDispatcher.h>
+#import <React/RCTUtils.h>
 
 NSString *const RCTOpenURLNotification = @"RCTOpenURLNotification";
 
 @implementation RCTLinkingManager
 
-@synthesize bridge = _bridge;
-
 RCT_EXPORT_MODULE()
-
-- (void)setBridge:(RCTBridge *)bridge
-{
-    _bridge = bridge;
-    // TODO: it's not a right place
-    // it should be called automatically
-    [self startObserving];
-}
 
 - (void)startObserving
 {
-  [[NSAppleEventManager sharedAppleEventManager] setEventHandler:self andSelector:@selector(getUrl:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
-
   [[NSNotificationCenter defaultCenter] addObserver:self
                                            selector:@selector(handleOpenURLNotification:)
                                                name:RCTOpenURLNotification
@@ -44,18 +32,12 @@ RCT_EXPORT_MODULE()
   [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
-- (NSDictionary<NSString *, id> *)constantsToExport
-{
-  NSString *argv = _bridge.launchOptions[@"argv"];
-  return @{@"argv": RCTNullIfNil(argv)};
-}
-
 - (NSArray<NSString *> *)supportedEvents
 {
   return @[@"url"];
 }
 
-+ (BOOL)application:(NSApplication *)application
++ (BOOL)application:(UIApplication *)application
             openURL:(NSURL *)URL
   sourceApplication:(NSString *)sourceApplication
          annotation:(id)annotation
@@ -67,16 +49,7 @@ RCT_EXPORT_MODULE()
   return YES;
 }
 
-- (void)getUrl:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent
-{
-    [[NSApp mainWindow] makeKeyAndOrderFront:nil];
-    NSString* url = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
-    NSDictionary *payload = @{@"url": url};
-    [_bridge.eventDispatcher sendDeviceEventWithName:@"openURL"
-                                                body:payload];
-}
-
-+ (BOOL)application:(NSApplication *)application
++ (BOOL)application:(UIApplication *)application
 continueUserActivity:(NSUserActivity *)userActivity
   restorationHandler:(void (^)(NSArray *))restorationHandler
 {
@@ -98,13 +71,14 @@ RCT_EXPORT_METHOD(openURL:(NSURL *)URL
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 {
-  // TODO: we should really return success/failure via a callback here
-  // Doesn't really matter what thread we call this on since it exits the app
-  [[NSWorkspace sharedWorkspace] openURL:URL];
+  BOOL opened = [RCTSharedApplication() openURL:URL];
+  if (opened) {
+    resolve(nil);
+  } else {
+    reject(RCTErrorUnspecified, [NSString stringWithFormat:@"Unable to open URL: %@", URL], nil);
+  }
 }
 
-
-//TODO: implement canOpenURL or add different apis such as open File, launchApplication
 RCT_EXPORT_METHOD(canOpenURL:(NSURL *)URL
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(__unused RCTPromiseRejectBlock)reject)
@@ -121,26 +95,24 @@ RCT_EXPORT_METHOD(canOpenURL:(NSURL *)URL
   // simply resolving with NO
 
   // This can be expensive, so we deliberately don't call on main thread
-  BOOL canOpen = YES; // TODO: actual checking
+  BOOL canOpen = [RCTSharedApplication() canOpenURL:URL];
   resolve(@(canOpen));
 }
 
-//RCT_EXPORT_METHOD(getInitialURL:(RCTPromiseResolveBlock)resolve
-//                  reject:(__unused RCTPromiseRejectBlock)reject)
-//{
-//  NSURL *initialURL = nil;
-//  if (self.bridge.launchOptions[UIApplicationLaunchOptionsURLKey]) {
-//    initialURL = self.bridge.launchOptions[UIApplicationLaunchOptionsURLKey];
-//  } else if (&UIApplicationLaunchOptionsUserActivityDictionaryKey &&
-//             self.bridge.launchOptions[UIApplicationLaunchOptionsUserActivityDictionaryKey]) {
-//    NSDictionary *userActivityDictionary =
-//      self.bridge.launchOptions[UIApplicationLaunchOptionsUserActivityDictionaryKey];
-//
-//    if ([userActivityDictionary[UIApplicationLaunchOptionsUserActivityTypeKey] isEqual:NSUserActivityTypeBrowsingWeb]) {
-//      initialURL = ((NSUserActivity *)userActivityDictionary[@"UIApplicationLaunchOptionsUserActivityKey"]).webpageURL;
-//    }
-//  }
-//  resolve(RCTNullIfNil(initialURL.absoluteString));
-//}
+RCT_EXPORT_METHOD(getInitialURL:(RCTPromiseResolveBlock)resolve
+                  reject:(__unused RCTPromiseRejectBlock)reject)
+{
+  NSURL *initialURL = nil;
+  if (self.bridge.launchOptions[UIApplicationLaunchOptionsURLKey]) {
+    initialURL = self.bridge.launchOptions[UIApplicationLaunchOptionsURLKey];
+  } else {
+    NSDictionary *userActivityDictionary =
+      self.bridge.launchOptions[UIApplicationLaunchOptionsUserActivityDictionaryKey];
+    if ([userActivityDictionary[UIApplicationLaunchOptionsUserActivityTypeKey] isEqual:NSUserActivityTypeBrowsingWeb]) {
+      initialURL = ((NSUserActivity *)userActivityDictionary[@"UIApplicationLaunchOptionsUserActivityKey"]).webpageURL;
+    }
+  }
+  resolve(RCTNullIfNil(initialURL.absoluteString));
+}
 
 @end
